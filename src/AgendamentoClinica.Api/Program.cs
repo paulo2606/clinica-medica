@@ -1,8 +1,12 @@
+using AgendamentoClinica.Api.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddDbContext<AgendamentoDbContext>(opcoes =>
+    opcoes.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(opcoes =>
 {
