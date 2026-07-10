@@ -11,10 +11,6 @@ public class AuthService : IAuthService
 {
     private const int TamanhoMinimoSenha = 8;
 
-    // Hash "de mentira" usado quando o e-mail não existe, só pra forçar o
-    // BCrypt a rodar do mesmo jeito — sem isso, login com e-mail inexistente
-    // responde mais rápido que login com senha errada, e dá pra enumerar
-    // e-mails cadastrados só medindo o tempo de resposta (timing attack).
     private const string HashFalsoParaTempoConstante = "$2a$11$C6UzMDM.H6dfI/f/IKcEeO7ZZzP0iM5T5RQ7EX8LQ.a1kJ3d8v.CO";
 
     private readonly AgendamentoDbContext _db;
@@ -81,7 +77,7 @@ public class AuthService : IAuthService
             return null;
         }
 
-        if (await _db.Usuarios.AnyAsync(u => u.Email == email))
+        if (await _db.Usuarios.AnyAsync(u => u.Email == email || u.Telefone == telefone))
         {
             return null;
         }
@@ -103,9 +99,7 @@ public class AuthService : IAuthService
         }
         catch (DbUpdateException)
         {
-            // Dois cadastros com o mesmo e-mail chegaram ao mesmo tempo: o check
-            // acima passou pros dois, mas o unique index do banco rejeitou o segundo.
-            if (await _db.Usuarios.AnyAsync(u => u.Email == email && u.Id != usuario.Id))
+            if (await _db.Usuarios.AnyAsync(u => (u.Email == email || u.Telefone == telefone) && u.Id != usuario.Id))
             {
                 return null;
             }

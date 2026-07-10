@@ -82,7 +82,7 @@ public class AuthController : ControllerBase
         var id = await _authService.CadastrarAsync(requisicao.Nome, requisicao.Email, requisicao.Senha, requisicao.Telefone, requisicao.Papel);
         if (id is null)
         {
-            return BadRequest(new { mensagem = "Não foi possível cadastrar: e-mail já cadastrado ou senha muito curta (mínimo 8 caracteres)." });
+            return BadRequest(new { mensagem = "Não foi possível cadastrar: e-mail ou telefone já cadastrado, ou senha muito curta (mínimo 8 caracteres)." });
         }
 
         return Created(string.Empty, new { id });

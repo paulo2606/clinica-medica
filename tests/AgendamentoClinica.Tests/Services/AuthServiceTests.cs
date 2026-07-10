@@ -175,6 +175,18 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task CadastrarAsync_ComTelefoneJaExistente_DeveRetornarNulo()
+    {
+        var db = CriarDbContext();
+        var servico = new AuthService(db, new SenhaService(), CriarTokenService());
+        await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Medico);
+
+        var id = await servico.CadastrarAsync("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao);
+
+        Assert.Null(id);
+    }
+
+    [Fact]
     public async Task CadastrarAsync_ComSenhaCurta_DeveRetornarNulo()
     {
         var db = CriarDbContext();
