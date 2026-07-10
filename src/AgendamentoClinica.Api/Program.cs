@@ -19,6 +19,10 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEspecialidadeService, EspecialidadeService>();
 builder.Services.AddScoped<IPacienteService, PacienteService>();
+builder.Services.AddSingleton<FilaEmail>();
+builder.Services.AddSingleton<IFilaEmail>(sp => sp.GetRequiredService<FilaEmail>());
+builder.Services.AddSingleton<IEmailService, EmailService>();
+builder.Services.AddHostedService<FilaEmailBackgroundService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opcoes =>
