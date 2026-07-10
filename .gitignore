@@ -1,4 +1,6 @@
 docs/superpowers/
+CLAUDE.md
+.env.example
 
 bin/
 obj/
