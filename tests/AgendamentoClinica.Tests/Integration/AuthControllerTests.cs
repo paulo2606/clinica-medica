@@ -1,0 +1,150 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using AgendamentoClinica.Api.Data;
+using AgendamentoClinica.Api.Dtos;
+using AgendamentoClinica.Api.Models;
+using AgendamentoClinica.Api.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AgendamentoClinica.Tests.Integration;
+
+public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
+{
+    private readonly CustomWebApplicationFactory _factory;
+
+    public AuthControllerTests(CustomWebApplicationFactory factory)
+    {
+        _factory = factory;
+    }
+
+    public async Task InitializeAsync()
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        await db.Database.MigrateAsync();
+        db.TokensRenovacao.RemoveRange(db.TokensRenovacao);
+        db.Usuarios.RemoveRange(db.Usuarios);
+        await db.SaveChangesAsync();
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    private async Task CriarUsuarioAsync(string email, string senha, PapelUsuario papel)
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var senhaService = escopo.ServiceProvider.GetRequiredService<ISenhaService>();
+        db.Usuarios.Add(new Usuario
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Usuário Teste",
+            Email = email,
+            SenhaHash = senhaService.GerarHash(senha),
+            Papel = papel,
+            Ativo = true
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<string> LogarEObterTokenAsync(HttpClient cliente, string email, string senha)
+    {
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, senha));
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return corpo!["accessToken"];
+    }
+
+    [Fact]
+    public async Task Login_ComCredenciaisValidas_DeveRetornarAccessTokenECookieRefresh()
+    {
+        await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login",
+            new LoginRequest("ana@clinica.com", "senha123"));
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.False(string.IsNullOrEmpty(corpo!["accessToken"]));
+        Assert.Contains(resposta.Headers.GetValues("Set-Cookie"),
+            c => c.Contains("refreshToken") && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Login_ComSenhaIncorreta_DeveRetornar401ComMensagemGenerica()
+    {
+        await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login",
+            new LoginRequest("ana@clinica.com", "senhaErrada"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Eu_ComTokenValido_DeveRetornarDadosDoUsuario()
+    {
+        await CriarUsuarioAsync("bruno@clinica.com", "senha123", PapelUsuario.Medico);
+        var cliente = _factory.CreateClient();
+        var token = await LogarEObterTokenAsync(cliente, "bruno@clinica.com", "senha123");
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resposta = await cliente.GetAsync("/api/auth/eu");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.Equal("Medico", corpo!["papel"]);
+    }
+
+    [Fact]
+    public async Task Eu_SemToken_DeveRetornar401()
+    {
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.GetAsync("/api/auth/eu");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cadastro_ComoAdmin_DeveCriarUsuario()
+    {
+        await CriarUsuarioAsync("admin@clinica.com", "senhaAdmin123", PapelUsuario.Admin);
+        var cliente = _factory.CreateClient();
+        var token = await LogarEObterTokenAsync(cliente, "admin@clinica.com", "senhaAdmin123");
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
+            new CriarUsuarioRequest("Carla Recepcao", "carla@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cadastro_ComoRecepcao_DeveRetornar403()
+    {
+        await CriarUsuarioAsync("recepcao@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+        var token = await LogarEObterTokenAsync(cliente, "recepcao@clinica.com", "senha123");
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
+            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+
+        Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cadastro_SemToken_DeveRetornar401()
+    {
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
+            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
+    }
+}
