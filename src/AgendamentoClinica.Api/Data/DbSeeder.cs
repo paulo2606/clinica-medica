@@ -6,6 +6,10 @@ namespace AgendamentoClinica.Api.Data;
 
 public static class DbSeeder
 {
+    // Reservado só pro seed inicial — Telefone é único, então não pode ficar
+    // vazio (colidiria se algum dia outro usuário também tivesse telefone "").
+    private const string TelefonePlaceholderSeed = "00000000000";
+
     public static async Task SemearAdminInicialAsync(AgendamentoDbContext db, ISenhaService senhaService, IConfiguration configuracao)
     {
         if (await db.Usuarios.AnyAsync())
@@ -30,7 +34,7 @@ public static class DbSeeder
             Id = Guid.NewGuid(),
             Nome = "Administrador",
             Email = emailInicial,
-            Telefone = "",
+            Telefone = TelefonePlaceholderSeed,
             SenhaHash = senhaService.GerarHash(senhaInicial),
             Papel = PapelUsuario.Admin,
             Ativo = true
