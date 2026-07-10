@@ -44,4 +44,10 @@ public class TokenService : ITokenService
         var bytes = RandomNumberGenerator.GetBytes(64);
         return Convert.ToBase64String(bytes);
     }
+
+    public string HashToken(string tokenBruto)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(tokenBruto));
+        return Convert.ToHexString(bytes);
+    }
 }

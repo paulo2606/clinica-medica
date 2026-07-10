@@ -52,4 +52,16 @@ public class TokenServiceTests
 
         Assert.NotEqual(token1, token2);
     }
+
+    [Fact]
+    public void HashToken_MesmaEntrada_DeveGerarMesmoHash()
+    {
+        var servico = CriarServico();
+
+        var hash1 = servico.HashToken("token-bruto");
+        var hash2 = servico.HashToken("token-bruto");
+
+        Assert.Equal(hash1, hash2);
+        Assert.NotEqual("token-bruto", hash1);
+    }
 }

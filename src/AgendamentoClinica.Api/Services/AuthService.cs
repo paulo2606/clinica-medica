@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Models;
@@ -41,7 +39,7 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> RenovarAsync(string refreshTokenBruto)
     {
-        var hash = HashToken(refreshTokenBruto);
+        var hash = _tokenService.HashToken(refreshTokenBruto);
         var registro = await _db.TokensRenovacao
             .Include(t => t.Usuario)
             .FirstOrDefaultAsync(t => t.TokenHash == hash
@@ -59,7 +57,7 @@ public class AuthService : IAuthService
 
     public async Task RevogarAsync(string refreshTokenBruto)
     {
-        var hash = HashToken(refreshTokenBruto);
+        var hash = _tokenService.HashToken(refreshTokenBruto);
         var registro = await _db.TokensRenovacao
             .FirstOrDefaultAsync(t => t.TokenHash == hash && t.RevogadoEm == null);
 
@@ -118,17 +116,11 @@ public class AuthService : IAuthService
         {
             Id = Guid.NewGuid(),
             UsuarioId = usuario.Id,
-            TokenHash = HashToken(refreshTokenBruto),
+            TokenHash = _tokenService.HashToken(refreshTokenBruto),
             ExpiraEm = DateTime.UtcNow.AddDays(7)
         });
         await _db.SaveChangesAsync();
 
         return new LoginResponse(accessToken, refreshTokenBruto);
-    }
-
-    private static string HashToken(string tokenBruto)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(tokenBruto));
-        return Convert.ToHexString(bytes);
     }
 }
