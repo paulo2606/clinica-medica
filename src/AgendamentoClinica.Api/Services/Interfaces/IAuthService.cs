@@ -9,4 +9,7 @@ public interface IAuthService
     Task<LoginResponse?> RenovarAsync(string refreshTokenBruto);
     Task RevogarAsync(string refreshTokenBruto);
     Task<Guid?> CadastrarAsync(string nome, string email, string senha, string telefone, PapelUsuario papel);
+    Task EsqueciSenhaAsync(string email);
+    Task<ResultadoOperacao> DefinirSenhaAsync(string tokenBruto, string novaSenha);
+    Task<bool> TrocarSenhaAsync(Guid usuarioId, string senhaAtual, string novaSenha);
 }

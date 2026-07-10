@@ -88,6 +88,42 @@ public class AuthController : ControllerBase
         return Created(string.Empty, new { id });
     }
 
+    [EnableRateLimiting("auth-sensivel")]
+    [HttpPost("esqueci-senha")]
+    public async Task<IActionResult> EsqueciSenha([FromBody] EsqueciSenhaRequest requisicao)
+    {
+        await _authService.EsqueciSenhaAsync(requisicao.Email);
+        return Ok(new { mensagem = "Se o e-mail informado estiver cadastrado, você receberá instruções para redefinir a senha." });
+    }
+
+    [EnableRateLimiting("auth-sensivel")]
+    [HttpPost("definir-senha")]
+    public async Task<IActionResult> DefinirSenha([FromBody] DefinirSenhaRequest requisicao)
+    {
+        var resultado = await _authService.DefinirSenhaAsync(requisicao.Token, requisicao.NovaSenha);
+        if (resultado != ResultadoOperacao.Sucesso)
+        {
+            return BadRequest(new { mensagem = "Link inválido, expirado ou já utilizado." });
+        }
+
+        return NoContent();
+    }
+
+    [Authorize]
+    [EnableRateLimiting("auth-sensivel")]
+    [HttpPut("senha")]
+    public async Task<IActionResult> TrocarSenha([FromBody] TrocarSenhaRequest requisicao)
+    {
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var sucesso = await _authService.TrocarSenhaAsync(usuarioId, requisicao.SenhaAtual, requisicao.NovaSenha);
+        if (!sucesso)
+        {
+            return BadRequest(new { mensagem = "Senha atual incorreta." });
+        }
+
+        return NoContent();
+    }
+
     private void DefinirCookieRefresh(string refreshToken)
     {
         Response.Cookies.Append(NomeCookieRefresh, refreshToken, new CookieOptions

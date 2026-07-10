@@ -30,6 +30,20 @@ public class AuthServiceTests
         return new TokenService(configuracao);
     }
 
+    private class FilaEmailFake : IFilaEmail
+    {
+        public List<EmailMensagem> Enfileiradas { get; } = [];
+        public void Enfileirar(EmailMensagem mensagem) => Enfileiradas.Add(mensagem);
+    }
+
+    private static AuthService CriarServico(AgendamentoDbContext db, ISenhaService senhaService, IFilaEmail? filaEmail = null)
+    {
+        var configuracao = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Frontend:UrlBase"] = "http://localhost:3000" })
+            .Build();
+        return new AuthService(db, senhaService, CriarTokenService(), filaEmail ?? new FilaEmailFake(), configuracao);
+    }
+
     private static async Task<Usuario> CriarUsuarioAsync(AgendamentoDbContext db, ISenhaService senhaService, bool ativo = true)
     {
         var usuario = new Usuario
@@ -52,7 +66,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
 
         var resultado = await servico.AutenticarAsync("ana@clinica.com", "senha123");
 
@@ -67,7 +81,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
 
         var resultado = await servico.AutenticarAsync("ana@clinica.com", "senhaErrada");
 
@@ -77,11 +91,9 @@ public class AuthServiceTests
     [Fact]
     public async Task AutenticarAsync_ComEmailInexistente_DeveChamarVerificarMesmoAssim()
     {
-        // Prova a correção do timing attack: mesmo sem usuário, o hash precisa
-        // ser comparado, senão o tempo de resposta denuncia que o e-mail não existe.
         var db = CriarDbContext();
         var senhaServiceFake = new SenhaServiceContadora();
-        var servico = new AuthService(db, senhaServiceFake, CriarTokenService());
+        var servico = CriarServico(db, senhaServiceFake);
 
         var resultado = await servico.AutenticarAsync("naoexiste@clinica.com", "qualquerSenha");
 
@@ -108,7 +120,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService, ativo: false);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
 
         var resultado = await servico.AutenticarAsync("ana@clinica.com", "senha123");
 
@@ -121,7 +133,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
         var login = await servico.AutenticarAsync("ana@clinica.com", "senha123");
 
         var renovado = await servico.RenovarAsync(login!.RefreshToken);
@@ -138,7 +150,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
         var login = await servico.AutenticarAsync("ana@clinica.com", "senha123");
 
         await servico.RevogarAsync(login!.RefreshToken);
@@ -151,7 +163,7 @@ public class AuthServiceTests
     public async Task CadastrarAsync_ComDadosValidos_DeveCriarUsuario()
     {
         var db = CriarDbContext();
-        var servico = new AuthService(db, new SenhaService(), CriarTokenService());
+        var servico = CriarServico(db, new SenhaService());
 
         var id = await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Medico);
 
@@ -167,7 +179,7 @@ public class AuthServiceTests
         var db = CriarDbContext();
         var senhaService = new SenhaService();
         await CriarUsuarioAsync(db, senhaService);
-        var servico = new AuthService(db, senhaService, CriarTokenService());
+        var servico = CriarServico(db, senhaService);
 
         var id = await servico.CadastrarAsync("Outra Pessoa", "ana@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao);
 
@@ -178,7 +190,7 @@ public class AuthServiceTests
     public async Task CadastrarAsync_ComTelefoneJaExistente_DeveRetornarNulo()
     {
         var db = CriarDbContext();
-        var servico = new AuthService(db, new SenhaService(), CriarTokenService());
+        var servico = CriarServico(db, new SenhaService());
         await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Medico);
 
         var id = await servico.CadastrarAsync("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao);
@@ -190,10 +202,170 @@ public class AuthServiceTests
     public async Task CadastrarAsync_ComSenhaCurta_DeveRetornarNulo()
     {
         var db = CriarDbContext();
-        var servico = new AuthService(db, new SenhaService(), CriarTokenService());
+        var servico = CriarServico(db, new SenhaService());
 
         var id = await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "1234567", "11988887777", PapelUsuario.Medico);
 
         Assert.Null(id);
+    }
+
+    [Fact]
+    public async Task EsqueciSenhaAsync_ComEmailExistente_DeveEnfileirarEmailEGerarToken()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var fila = new FilaEmailFake();
+        var servico = CriarServico(db, senhaService, fila);
+
+        await servico.EsqueciSenhaAsync("ana@clinica.com");
+
+        Assert.Single(fila.Enfileiradas);
+        Assert.Equal("ana@clinica.com", fila.Enfileiradas[0].Para);
+        Assert.True(await db.TokensConviteSenha.AnyAsync(t => t.UsuarioId == usuario.Id && t.UsadoEm == null));
+    }
+
+    [Fact]
+    public async Task EsqueciSenhaAsync_ComEmailInexistente_NaoDeveEnfileirarNada()
+    {
+        var db = CriarDbContext();
+        var fila = new FilaEmailFake();
+        var servico = CriarServico(db, new SenhaService(), fila);
+
+        await servico.EsqueciSenhaAsync("naoexiste@clinica.com");
+
+        Assert.Empty(fila.Enfileiradas);
+    }
+
+    [Fact]
+    public async Task EsqueciSenhaAsync_ChamadoDuasVezes_DeveInvalidarTokenAnterior()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var servico = CriarServico(db, senhaService);
+
+        await servico.EsqueciSenhaAsync("ana@clinica.com");
+        await servico.EsqueciSenhaAsync("ana@clinica.com");
+
+        var tokens = await db.TokensConviteSenha.Where(t => t.UsuarioId == usuario.Id).ToListAsync();
+        Assert.Equal(2, tokens.Count);
+        Assert.Single(tokens, t => t.UsadoEm == null);
+    }
+
+    [Fact]
+    public async Task DefinirSenhaAsync_ComTokenValido_DeveTrocarSenhaEPermitirLogin()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var tokenService = CriarTokenService();
+        var tokenBruto = tokenService.GerarRefreshTokenBruto();
+        db.TokensConviteSenha.Add(new TokenConviteSenha
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = usuario.Id,
+            TokenHash = tokenService.HashToken(tokenBruto),
+            ExpiraEm = DateTime.UtcNow.AddHours(1)
+        });
+        await db.SaveChangesAsync();
+        var servico = CriarServico(db, senhaService);
+
+        var resultado = await servico.DefinirSenhaAsync(tokenBruto, "novaSenhaForte123");
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var login = await servico.AutenticarAsync("ana@clinica.com", "novaSenhaForte123");
+        Assert.NotNull(login);
+    }
+
+    [Fact]
+    public async Task DefinirSenhaAsync_ComTokenInvalido_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var servico = CriarServico(db, new SenhaService());
+
+        var resultado = await servico.DefinirSenhaAsync("token-invalido", "novaSenhaForte123");
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+    }
+
+    [Fact]
+    public async Task DefinirSenhaAsync_ComTokenJaUsado_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var tokenService = CriarTokenService();
+        var tokenBruto = tokenService.GerarRefreshTokenBruto();
+        db.TokensConviteSenha.Add(new TokenConviteSenha
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = usuario.Id,
+            TokenHash = tokenService.HashToken(tokenBruto),
+            ExpiraEm = DateTime.UtcNow.AddHours(1),
+            UsadoEm = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var servico = CriarServico(db, senhaService);
+
+        var resultado = await servico.DefinirSenhaAsync(tokenBruto, "novaSenhaForte123");
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+    }
+
+    [Fact]
+    public async Task DefinirSenhaAsync_DeveRevogarRefreshTokensExistentes()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var servico = CriarServico(db, senhaService);
+        var login = await servico.AutenticarAsync("ana@clinica.com", "senha123");
+        var tokenService = CriarTokenService();
+        var tokenBruto = tokenService.GerarRefreshTokenBruto();
+        db.TokensConviteSenha.Add(new TokenConviteSenha
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = usuario.Id,
+            TokenHash = tokenService.HashToken(tokenBruto),
+            ExpiraEm = DateTime.UtcNow.AddHours(1)
+        });
+        await db.SaveChangesAsync();
+
+        await servico.DefinirSenhaAsync(tokenBruto, "novaSenhaForte123");
+        var renovado = await servico.RenovarAsync(login!.RefreshToken);
+
+        Assert.Null(renovado);
+    }
+
+    [Fact]
+    public async Task TrocarSenhaAsync_ComSenhaAtualCorreta_DeveTrocarERevogarSessoes()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var servico = CriarServico(db, senhaService);
+        var login = await servico.AutenticarAsync("ana@clinica.com", "senha123");
+
+        var sucesso = await servico.TrocarSenhaAsync(usuario.Id, "senha123", "novaSenhaForte123");
+
+        Assert.True(sucesso);
+        var loginNovo = await servico.AutenticarAsync("ana@clinica.com", "novaSenhaForte123");
+        Assert.NotNull(loginNovo);
+        var renovado = await servico.RenovarAsync(login!.RefreshToken);
+        Assert.Null(renovado);
+    }
+
+    [Fact]
+    public async Task TrocarSenhaAsync_ComSenhaAtualErrada_DeveRetornarFalse()
+    {
+        var db = CriarDbContext();
+        var senhaService = new SenhaService();
+        var usuario = await CriarUsuarioAsync(db, senhaService);
+        var servico = CriarServico(db, senhaService);
+
+        var sucesso = await servico.TrocarSenhaAsync(usuario.Id, "senhaErrada", "novaSenhaForte123");
+
+        Assert.False(sucesso);
     }
 }

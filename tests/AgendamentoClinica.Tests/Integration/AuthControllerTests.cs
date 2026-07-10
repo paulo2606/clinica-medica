@@ -26,6 +26,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
+        db.TokensConviteSenha.RemoveRange(db.TokensConviteSenha);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);
         db.Usuarios.RemoveRange(db.Usuarios);
         await db.SaveChangesAsync();
@@ -148,6 +149,105 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
 
         var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
             new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task EsqueciSenha_ComEmailExistente_DeveRetornar200()
+    {
+        await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/esqueci-senha", new EsqueciSenhaRequest("ana@clinica.com"));
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task EsqueciSenha_ComEmailInexistente_DeveRetornarMesmoStatusEMensagem()
+    {
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/esqueci-senha", new EsqueciSenhaRequest("naoexiste@clinica.com"));
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task DefinirSenha_ComTokenValido_DevePermitirLoginComNovaSenha()
+    {
+        var usuarioId = await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+
+        using (var escopo = _factory.Services.CreateScope())
+        {
+            var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+            var tokenService = escopo.ServiceProvider.GetRequiredService<ITokenService>();
+            var tokenBruto = tokenService.GerarRefreshTokenBruto();
+            db.TokensConviteSenha.Add(new TokenConviteSenha
+            {
+                Id = Guid.NewGuid(),
+                UsuarioId = usuarioId,
+                TokenHash = tokenService.HashToken(tokenBruto),
+                ExpiraEm = DateTime.UtcNow.AddHours(1)
+            });
+            await db.SaveChangesAsync();
+
+            var resposta = await cliente.PostAsJsonAsync("/api/auth/definir-senha",
+                new DefinirSenhaRequest(tokenBruto, "novaSenhaForte123"));
+            Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
+        }
+
+        var loginResposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest("ana@clinica.com", "novaSenhaForte123"));
+        Assert.Equal(HttpStatusCode.OK, loginResposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task DefinirSenha_ComTokenInvalido_DeveRetornar400()
+    {
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/definir-senha",
+            new DefinirSenhaRequest("token-invalido", "novaSenhaForte123"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task TrocarSenha_ComSenhaAtualCorreta_DevePermitirLoginComNovaSenha()
+    {
+        await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+        var token = await LogarEObterTokenAsync(cliente, "ana@clinica.com", "senha123");
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resposta = await cliente.PutAsJsonAsync("/api/auth/senha", new TrocarSenhaRequest("senha123", "novaSenhaForte123"));
+
+        Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
+        var loginResposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest("ana@clinica.com", "novaSenhaForte123"));
+        Assert.Equal(HttpStatusCode.OK, loginResposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task TrocarSenha_ComSenhaAtualErrada_DeveRetornar400()
+    {
+        await CriarUsuarioAsync("ana@clinica.com", "senha123", PapelUsuario.Recepcao);
+        var cliente = _factory.CreateClient();
+        var token = await LogarEObterTokenAsync(cliente, "ana@clinica.com", "senha123");
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var resposta = await cliente.PutAsJsonAsync("/api/auth/senha", new TrocarSenhaRequest("senhaErrada", "novaSenhaForte123"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task TrocarSenha_SemToken_DeveRetornar401()
+    {
+        var cliente = _factory.CreateClient();
+
+        var resposta = await cliente.PutAsJsonAsync("/api/auth/senha", new TrocarSenhaRequest("senha123", "novaSenhaForte123"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
     }

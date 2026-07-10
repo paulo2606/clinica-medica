@@ -42,7 +42,7 @@ public class TokenService : ITokenService
     public string GerarRefreshTokenBruto()
     {
         var bytes = RandomNumberGenerator.GetBytes(64);
-        return Convert.ToBase64String(bytes);
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     public string HashToken(string tokenBruto)
