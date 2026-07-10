@@ -24,7 +24,7 @@ public class EmailService : IEmailService
             mensagemMime.From.Add(MailboxAddress.Parse(_configuracao["Email:Remetente"]));
             mensagemMime.To.Add(MailboxAddress.Parse(mensagem.Para));
             mensagemMime.Subject = mensagem.Assunto;
-            mensagemMime.Body = new TextPart("plain") { Text = mensagem.Corpo };
+            mensagemMime.Body = new TextPart("html") { Text = mensagem.Corpo };
 
             using var cliente = new SmtpClient();
             await cliente.ConnectAsync(
@@ -39,9 +39,6 @@ public class EmailService : IEmailService
         }
         catch (Exception ex)
         {
-            // Falha de envio (SMTP fora do ar, credencial errada, rede) não pode
-            // derrubar quem chamou — a FilaEmailBackgroundService decide se tenta
-            // de novo. Nunca loga o corpo da mensagem: pode conter o token de convite.
             _logger.LogError(ex, "Falha ao enviar e-mail para {Destinatario}", mensagem.Para);
             return false;
         }
