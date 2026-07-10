@@ -11,6 +11,12 @@ public class AuthService : IAuthService
 {
     private const int TamanhoMinimoSenha = 8;
 
+    // Hash "de mentira" usado quando o e-mail não existe, só pra forçar o
+    // BCrypt a rodar do mesmo jeito — sem isso, login com e-mail inexistente
+    // responde mais rápido que login com senha errada, e dá pra enumerar
+    // e-mails cadastrados só medindo o tempo de resposta (timing attack).
+    private const string HashFalsoParaTempoConstante = "$2a$11$C6UzMDM.H6dfI/f/IKcEeO7ZZzP0iM5T5RQ7EX8LQ.a1kJ3d8v.CO";
+
     private readonly AgendamentoDbContext _db;
     private readonly ISenhaService _senhaService;
     private readonly ITokenService _tokenService;
@@ -27,7 +33,9 @@ public class AuthService : IAuthService
         var usuario = await _db.Usuarios
             .FirstOrDefaultAsync(u => u.Email == email && u.Ativo);
 
-        if (usuario is null || !_senhaService.Verificar(senha, usuario.SenhaHash))
+        var senhaValida = _senhaService.Verificar(senha, usuario?.SenhaHash ?? HashFalsoParaTempoConstante);
+
+        if (usuario is null || !senhaValida)
         {
             return null;
         }

@@ -19,7 +19,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["ConnectionStrings:Default"] = ConexaoTeste,
                 ["Jwt:SecretKey"] = "chave-de-teste-com-pelo-menos-32-bytes-1234",
                 ["Jwt:Issuer"] = "AgendamentoClinica",
-                ["Jwt:Audience"] = "AgendamentoClinica.Cliente"
+                ["Jwt:Audience"] = "AgendamentoClinica.Cliente",
+                ["RateLimiting:AuthSensivel:PermitLimit"] = "1000"
             });
         });
     }

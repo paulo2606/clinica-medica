@@ -1,6 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AgendamentoClinica.Api.Dtos;
 
 public record LoginRequest(
-    string Email, 
-    string Senha
+    [Required, EmailAddress] string Email,
+    [Required] string Senha
     );

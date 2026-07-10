@@ -11,6 +11,7 @@ using Xunit;
 
 namespace AgendamentoClinica.Tests.Integration;
 
+[Collection("BancoDeTeste")]
 public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
 {
     private readonly CustomWebApplicationFactory _factory;
@@ -32,12 +33,12 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private async Task CriarUsuarioAsync(string email, string senha, PapelUsuario papel)
+    private async Task<Guid> CriarUsuarioAsync(string email, string senha, PapelUsuario papel)
     {
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         var senhaService = escopo.ServiceProvider.GetRequiredService<ISenhaService>();
-        db.Usuarios.Add(new Usuario
+        var usuario = new Usuario
         {
             Id = Guid.NewGuid(),
             Nome = "Usuário Teste",
@@ -45,8 +46,10 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
             SenhaHash = senhaService.GerarHash(senha),
             Papel = papel,
             Ativo = true
-        });
+        };
+        db.Usuarios.Add(usuario);
         await db.SaveChangesAsync();
+        return usuario.Id;
     }
 
     private async Task<string> LogarEObterTokenAsync(HttpClient cliente, string email, string senha)
@@ -87,7 +90,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
     [Fact]
     public async Task Eu_ComTokenValido_DeveRetornarDadosDoUsuario()
     {
-        await CriarUsuarioAsync("bruno@clinica.com", "senha123", PapelUsuario.Medico);
+        var usuarioId = await CriarUsuarioAsync("bruno@clinica.com", "senha123", PapelUsuario.Medico);
         var cliente = _factory.CreateClient();
         var token = await LogarEObterTokenAsync(cliente, "bruno@clinica.com", "senha123");
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -96,6 +99,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
 
         Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
         var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        Assert.Equal(usuarioId.ToString(), corpo!["id"]);
         Assert.Equal("Medico", corpo!["papel"]);
     }
 

@@ -1,7 +1,10 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using AgendamentoClinica.Api.Data;
+using AgendamentoClinica.Api.Middleware;
 using AgendamentoClinica.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -18,6 +21,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opcoes =>
     {
+        opcoes.MapInboundClaims = false;
         opcoes.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -31,6 +35,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(opcoes =>
+{
+    var limitePermitido = builder.Configuration.GetValue("RateLimiting:AuthSensivel:PermitLimit", 5);
+    opcoes.AddPolicy("auth-sensivel", contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            contexto.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limitePermitido,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+    opcoes.OnRejected = async (contexto, ct) =>
+    {
+        contexto.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await contexto.HttpContext.Response.WriteAsJsonAsync(
+            new { mensagem = "Muitas tentativas. Tente novamente em instantes." }, ct);
+    };
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(opcoes =>
@@ -66,10 +90,20 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseMiddleware<TratamentoErroMiddleware>();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+using (var escopoInicializacao = app.Services.CreateScope())
+{
+    var db = escopoInicializacao.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+    await db.Database.MigrateAsync();
+    var senhaService = escopoInicializacao.ServiceProvider.GetRequiredService<ISenhaService>();
+    await DbSeeder.SemearAdminInicialAsync(db, senhaService, app.Configuration);
+}
 
 app.Run();
 

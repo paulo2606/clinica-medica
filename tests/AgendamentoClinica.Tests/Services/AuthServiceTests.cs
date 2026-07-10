@@ -75,6 +75,34 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task AutenticarAsync_ComEmailInexistente_DeveChamarVerificarMesmoAssim()
+    {
+        // Prova a correção do timing attack: mesmo sem usuário, o hash precisa
+        // ser comparado, senão o tempo de resposta denuncia que o e-mail não existe.
+        var db = CriarDbContext();
+        var senhaServiceFake = new SenhaServiceContadora();
+        var servico = new AuthService(db, senhaServiceFake, CriarTokenService());
+
+        var resultado = await servico.AutenticarAsync("naoexiste@clinica.com", "qualquerSenha");
+
+        Assert.Null(resultado);
+        Assert.Equal(1, senhaServiceFake.ChamadasVerificar);
+    }
+
+    private class SenhaServiceContadora : ISenhaService
+    {
+        public int ChamadasVerificar { get; private set; }
+
+        public string GerarHash(string senha) => new SenhaService().GerarHash(senha);
+
+        public bool Verificar(string senha, string hash)
+        {
+            ChamadasVerificar++;
+            return false;
+        }
+    }
+
+    [Fact]
     public async Task AutenticarAsync_ComUsuarioInativo_DeveRetornarNulo()
     {
         var db = CriarDbContext();

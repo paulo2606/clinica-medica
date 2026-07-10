@@ -4,6 +4,7 @@ using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AgendamentoClinica.Api.Controllers;
 
@@ -19,6 +20,7 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    [EnableRateLimiting("auth-sensivel")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest requisicao)
     {
@@ -73,6 +75,7 @@ public class AuthController : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [EnableRateLimiting("auth-sensivel")]
     [HttpPost("cadastro")]
     public async Task<IActionResult> Cadastro([FromBody] CriarUsuarioRequest requisicao)
     {
