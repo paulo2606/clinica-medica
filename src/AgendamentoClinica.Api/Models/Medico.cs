@@ -7,6 +7,7 @@ public class Medico
     public Guid EspecialidadeId { get; set; }
     public string Crm { get; set; } = string.Empty;
     public int DuracaoConsultaPadraoMinutos { get; set; } = 30;
+    public bool Ativo { get; set; } = true;
 
     public Usuario? Usuario { get; set; }
     public Especialidade? Especialidade { get; set; }

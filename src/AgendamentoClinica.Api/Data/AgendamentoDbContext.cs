@@ -9,6 +9,7 @@ public class AgendamentoDbContext : DbContext
 
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<TokenRenovacao> TokensRenovacao => Set<TokenRenovacao>();
+    public DbSet<TokenConviteSenha> TokensConviteSenha => Set<TokenConviteSenha>();
     public DbSet<Especialidade> Especialidades => Set<Especialidade>();
     public DbSet<Medico> Medicos => Set<Medico>();
     public DbSet<HorarioTrabalhoMedico> HorariosTrabalhoMedico => Set<HorarioTrabalhoMedico>();
@@ -49,6 +50,23 @@ public class AgendamentoDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<TokenConviteSenha>(entidade =>
+        {
+            entidade.ToTable("tokens_convite_senha");
+            entidade.HasKey(t => t.Id);
+            entidade.Property(t => t.Id).HasColumnName("id");
+            entidade.Property(t => t.UsuarioId).HasColumnName("usuario_id");
+            entidade.Property(t => t.TokenHash).HasColumnName("token_hash").IsRequired();
+            entidade.HasIndex(t => t.TokenHash).IsUnique();
+            entidade.Property(t => t.ExpiraEm).HasColumnName("expira_em");
+            entidade.Property(t => t.UsadoEm).HasColumnName("usado_em");
+            entidade.Property(t => t.CriadoEm).HasColumnName("criado_em");
+            entidade.HasOne(t => t.Usuario)
+                .WithMany()
+                .HasForeignKey(t => t.UsuarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Especialidade>(entidade =>
         {
             entidade.ToTable("especialidades");
@@ -56,6 +74,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(e => e.Id).HasColumnName("id");
             entidade.Property(e => e.Nome).HasColumnName("nome").HasMaxLength(100).IsRequired();
             entidade.HasIndex(e => e.Nome).IsUnique();
+            entidade.Property(e => e.Ativo).HasColumnName("ativo").HasDefaultValue(true);
         });
 
         modelBuilder.Entity<Medico>(entidade =>
@@ -68,6 +87,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(m => m.Crm).HasColumnName("crm").HasMaxLength(20).IsRequired();
             entidade.HasIndex(m => m.Crm).IsUnique();
             entidade.Property(m => m.DuracaoConsultaPadraoMinutos).HasColumnName("duracao_consulta_padrao_minutos");
+            entidade.Property(m => m.Ativo).HasColumnName("ativo").HasDefaultValue(true);
 
             entidade.HasOne(m => m.Usuario)
                 .WithMany()
@@ -108,6 +128,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(p => p.Telefone).HasColumnName("telefone").HasMaxLength(20).IsRequired();
             entidade.Property(p => p.Email).HasColumnName("email").HasMaxLength(200);
             entidade.Property(p => p.DataNascimento).HasColumnName("data_nascimento");
+            entidade.Property(p => p.Ativo).HasColumnName("ativo").HasDefaultValue(true);
             entidade.Property(p => p.CriadoEm).HasColumnName("criado_em");
         });
 
