@@ -17,6 +17,7 @@ builder.Services.AddDbContext<AgendamentoDbContext>(opcoes =>
 builder.Services.AddScoped<ISenhaService, SenhaService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEspecialidadeService, EspecialidadeService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opcoes =>
