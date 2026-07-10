@@ -91,6 +91,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseMiddleware<TratamentoErroMiddleware>();
+app.Use(async (contexto, proximo) =>
+{
+    contexto.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    contexto.Response.Headers.Append("X-Frame-Options", "DENY");
+    contexto.Response.Headers.Append("Referrer-Policy", "no-referrer");
+    await proximo();
+});
 app.UseHttpsRedirection();
 app.UseRateLimiter();
 app.UseAuthentication();

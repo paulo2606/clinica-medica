@@ -97,7 +97,20 @@ public class AuthService : IAuthService
             Ativo = true
         };
         _db.Usuarios.Add(usuario);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Dois cadastros com o mesmo e-mail chegaram ao mesmo tempo: o check
+            // acima passou pros dois, mas o unique index do banco rejeitou o segundo.
+            if (await _db.Usuarios.AnyAsync(u => u.Email == email && u.Id != usuario.Id))
+            {
+                return null;
+            }
+            throw;
+        }
 
         return usuario.Id;
     }
