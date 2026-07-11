@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Middleware;
@@ -11,7 +12,8 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(opcoes => opcoes.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddDbContext<AgendamentoDbContext>(opcoes =>
     opcoes.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddScoped<ISenhaService, SenhaService>();

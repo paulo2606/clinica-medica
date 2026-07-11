@@ -91,7 +91,7 @@ public class HorariosTrabalhoControllerTests : IClassFixture<CustomWebApplicatio
         var medicoId = await CriarMedicoAsync();
 
         var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
-            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0)));
+            new CriarHorarioTrabalhoRequest(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0)));
 
         Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
     }
@@ -105,7 +105,7 @@ public class HorariosTrabalhoControllerTests : IClassFixture<CustomWebApplicatio
         var medicoId = await CriarMedicoAsync();
 
         var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
-            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0)));
+            new CriarHorarioTrabalhoRequest(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0)));
 
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
     }
@@ -119,8 +119,28 @@ public class HorariosTrabalhoControllerTests : IClassFixture<CustomWebApplicatio
         var medicoId = await CriarMedicoAsync();
 
         var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
-            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(12, 0), new TimeOnly(8, 0)));
+            new CriarHorarioTrabalhoRequest(medicoId, [DiaSemana.Segunda], new TimeOnly(12, 0), new TimeOnly(8, 0)));
 
         Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Criar_ComVariosDias_DeveCriarUmHorarioPorDia()
+    {
+        var cliente = _factory.CreateClient();
+        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Admin);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var medicoId = await CriarMedicoAsync();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
+            new CriarHorarioTrabalhoRequest(
+                medicoId,
+                [DiaSemana.Segunda, DiaSemana.Terca, DiaSemana.Quarta, DiaSemana.Quinta, DiaSemana.Sexta],
+                new TimeOnly(8, 0), new TimeOnly(18, 0)));
+
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+        var listaResposta = await cliente.GetAsync($"/api/horarios-trabalho?medicoId={medicoId}");
+        var horarios = await listaResposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        Assert.Equal(5, horarios!.Count);
     }
 }

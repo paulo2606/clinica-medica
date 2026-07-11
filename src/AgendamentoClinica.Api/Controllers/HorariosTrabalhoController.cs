@@ -20,14 +20,14 @@ public class HorariosTrabalhoController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] CriarHorarioTrabalhoRequest requisicao)
     {
-        var (resultado, id) = await _horarioTrabalhoService.CriarAsync(
-            requisicao.MedicoId, requisicao.DiaSemana, requisicao.HoraInicio, requisicao.HoraFim);
+        var (resultado, ids) = await _horarioTrabalhoService.CriarAsync(
+            requisicao.MedicoId, requisicao.DiasSemana, requisicao.HoraInicio, requisicao.HoraFim);
 
         return resultado switch
         {
             ResultadoOperacao.NaoEncontrado => BadRequest(new { mensagem = "Médico não encontrado ou inativo." }),
-            ResultadoOperacao.Duplicado => BadRequest(new { mensagem = "Horário se sobrepõe a outro já cadastrado nesse dia." }),
-            _ => Created(string.Empty, new { id })
+            ResultadoOperacao.Duplicado => BadRequest(new { mensagem = "Horário se sobrepõe a outro já cadastrado em algum dos dias selecionados." }),
+            _ => Created(string.Empty, new { ids })
         };
     }
 

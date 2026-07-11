@@ -1,9 +1,10 @@
 using System.ComponentModel.DataAnnotations;
+using AgendamentoClinica.Api.Models;
 
 namespace AgendamentoClinica.Api.Dtos;
 
 public record AtualizarHorarioTrabalhoRequest(
-    [Required] DayOfWeek DiaSemana,
+    [Required] DiaSemana DiaSemana,
     [Required] TimeOnly HoraInicio,
     [Required] TimeOnly HoraFim
     ) : IValidatableObject

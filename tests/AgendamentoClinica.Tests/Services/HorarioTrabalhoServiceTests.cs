@@ -28,7 +28,7 @@ public class HorarioTrabalhoServiceTests
             Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
             SenhaHash = "hash",
             Papel = PapelUsuario.Medico,
-            Ativo = true
+            Ativo = ativo
         };
         db.Usuarios.Add(usuario);
         var medico = new Medico
@@ -51,10 +51,45 @@ public class HorarioTrabalhoServiceTests
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
 
-        var (resultado, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (resultado, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
-        Assert.NotNull(id);
+        Assert.Single(ids);
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComVariosDias_DeveCriarUmHorarioPorDia()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var servico = new HorarioTrabalhoService(db);
+
+        var (resultado, ids) = await servico.CriarAsync(
+            medicoId, [DiaSemana.Segunda, DiaSemana.Terca, DiaSemana.Quarta, DiaSemana.Quinta, DiaSemana.Sexta],
+            new TimeOnly(8, 0), new TimeOnly(18, 0));
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        Assert.Equal(5, ids.Count);
+        var lista = await servico.ListarPorMedicoAsync(medicoId);
+        Assert.Equal(5, lista.Count);
+        Assert.All(lista, h => Assert.Equal(new TimeOnly(8, 0), h.HoraInicio));
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComConflitoEmUmDosDias_NaoDeveCriarNenhum()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var servico = new HorarioTrabalhoService(db);
+        await servico.CriarAsync(medicoId, [DiaSemana.Quarta], new TimeOnly(10, 0), new TimeOnly(14, 0));
+
+        var (resultado, ids) = await servico.CriarAsync(
+            medicoId, [DiaSemana.Segunda, DiaSemana.Terca, DiaSemana.Quarta], new TimeOnly(8, 0), new TimeOnly(12, 0));
+
+        Assert.Equal(ResultadoOperacao.Duplicado, resultado);
+        Assert.Empty(ids);
+        var lista = await servico.ListarPorMedicoAsync(medicoId);
+        Assert.Single(lista);
     }
 
     [Fact]
@@ -62,10 +97,10 @@ public class HorarioTrabalhoServiceTests
     {
         var servico = new HorarioTrabalhoService(CriarDbContext());
 
-        var (resultado, id) = await servico.CriarAsync(Guid.NewGuid(), DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (resultado, ids) = await servico.CriarAsync(Guid.NewGuid(), [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
-        Assert.Null(id);
+        Assert.Empty(ids);
     }
 
     [Fact]
@@ -75,10 +110,10 @@ public class HorarioTrabalhoServiceTests
         var medicoId = await CriarMedicoAsync(db, ativo: false);
         var servico = new HorarioTrabalhoService(db);
 
-        var (resultado, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (resultado, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
-        Assert.Null(id);
+        Assert.Empty(ids);
     }
 
     [Fact]
@@ -87,12 +122,12 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
-        var (resultado, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(11, 0), new TimeOnly(14, 0));
+        var (resultado, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(11, 0), new TimeOnly(14, 0));
 
         Assert.Equal(ResultadoOperacao.Duplicado, resultado);
-        Assert.Null(id);
+        Assert.Empty(ids);
     }
 
     [Fact]
@@ -101,12 +136,12 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
-        var (resultado, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(14, 0), new TimeOnly(18, 0));
+        var (resultado, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(14, 0), new TimeOnly(18, 0));
 
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
-        Assert.NotNull(id);
+        Assert.Single(ids);
     }
 
     [Fact]
@@ -115,12 +150,12 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
-        var (resultado, id) = await servico.CriarAsync(medicoId, DayOfWeek.Tuesday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (resultado, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Terca], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
-        Assert.NotNull(id);
+        Assert.Single(ids);
     }
 
     [Fact]
@@ -129,18 +164,18 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        await servico.CriarAsync(medicoId, DayOfWeek.Tuesday, new TimeOnly(8, 0), new TimeOnly(12, 0));
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(14, 0), new TimeOnly(18, 0));
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Terca], new TimeOnly(8, 0), new TimeOnly(12, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(14, 0), new TimeOnly(18, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         var lista = await servico.ListarPorMedicoAsync(medicoId);
 
         Assert.Equal(3, lista.Count);
-        Assert.Equal(DayOfWeek.Monday, lista[0].DiaSemana);
+        Assert.Equal(DiaSemana.Segunda, lista[0].DiaSemana);
         Assert.Equal(new TimeOnly(8, 0), lista[0].HoraInicio);
-        Assert.Equal(DayOfWeek.Monday, lista[1].DiaSemana);
+        Assert.Equal(DiaSemana.Segunda, lista[1].DiaSemana);
         Assert.Equal(new TimeOnly(14, 0), lista[1].HoraInicio);
-        Assert.Equal(DayOfWeek.Tuesday, lista[2].DiaSemana);
+        Assert.Equal(DiaSemana.Terca, lista[2].DiaSemana);
     }
 
     [Fact]
@@ -148,7 +183,7 @@ public class HorarioTrabalhoServiceTests
     {
         var servico = new HorarioTrabalhoService(CriarDbContext());
 
-        var resultado = await servico.AtualizarAsync(Guid.NewGuid(), DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var resultado = await servico.AtualizarAsync(Guid.NewGuid(), DiaSemana.Segunda, new TimeOnly(8, 0), new TimeOnly(12, 0));
 
         Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
     }
@@ -159,10 +194,10 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
-        var (_, idOutro) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(14, 0), new TimeOnly(18, 0));
+        await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (_, idsOutro) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(14, 0), new TimeOnly(18, 0));
 
-        var resultado = await servico.AtualizarAsync(idOutro!.Value, DayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(15, 0));
+        var resultado = await servico.AtualizarAsync(idsOutro.Single(), DiaSemana.Segunda, new TimeOnly(10, 0), new TimeOnly(15, 0));
 
         Assert.Equal(ResultadoOperacao.Duplicado, resultado);
     }
@@ -173,9 +208,9 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        var (_, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (_, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
-        var resultado = await servico.AtualizarAsync(id!.Value, DayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(13, 0));
+        var resultado = await servico.AtualizarAsync(ids.Single(), DiaSemana.Segunda, new TimeOnly(9, 0), new TimeOnly(13, 0));
 
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
         var lista = await servico.ListarPorMedicoAsync(medicoId);
@@ -188,9 +223,9 @@ public class HorarioTrabalhoServiceTests
         var db = CriarDbContext();
         var medicoId = await CriarMedicoAsync(db);
         var servico = new HorarioTrabalhoService(db);
-        var (_, id) = await servico.CriarAsync(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0));
+        var (_, ids) = await servico.CriarAsync(medicoId, [DiaSemana.Segunda], new TimeOnly(8, 0), new TimeOnly(12, 0));
 
-        var resultado = await servico.RemoverAsync(id!.Value);
+        var resultado = await servico.RemoverAsync(ids.Single());
 
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
         Assert.Empty(await servico.ListarPorMedicoAsync(medicoId));

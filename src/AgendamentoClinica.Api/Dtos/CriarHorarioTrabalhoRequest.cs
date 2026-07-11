@@ -1,10 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using AgendamentoClinica.Api.Models;
 
 namespace AgendamentoClinica.Api.Dtos;
 
 public record CriarHorarioTrabalhoRequest(
     [Required] Guid MedicoId,
-    [Required] DayOfWeek DiaSemana,
+    [Required, MinLength(1)] List<DiaSemana> DiasSemana,
     [Required] TimeOnly HoraInicio,
     [Required] TimeOnly HoraFim
     ) : IValidatableObject

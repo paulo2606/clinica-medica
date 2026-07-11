@@ -13,31 +13,34 @@ public class HorarioTrabalhoService : IHorarioTrabalhoService
         _db = db;
     }
 
-    public async Task<(ResultadoOperacao Resultado, Guid? Id)> CriarAsync(
-        Guid medicoId, DayOfWeek diaSemana, TimeOnly horaInicio, TimeOnly horaFim)
+    public async Task<(ResultadoOperacao Resultado, List<Guid> Ids)> CriarAsync(
+        Guid medicoId, List<DiaSemana> diasSemana, TimeOnly horaInicio, TimeOnly horaFim)
     {
         if (!await _db.Medicos.AnyAsync(m => m.Id == medicoId && m.Ativo))
         {
-            return (ResultadoOperacao.NaoEncontrado, null);
+            return (ResultadoOperacao.NaoEncontrado, []);
         }
 
-        if (await ExisteSobreposicaoAsync(medicoId, diaSemana, horaInicio, horaFim))
+        foreach (var diaSemana in diasSemana.Distinct())
         {
-            return (ResultadoOperacao.Duplicado, null);
+            if (await ExisteSobreposicaoAsync(medicoId, diaSemana, horaInicio, horaFim))
+            {
+                return (ResultadoOperacao.Duplicado, []);
+            }
         }
 
-        var horario = new HorarioTrabalhoMedico
+        var horarios = diasSemana.Distinct().Select(diaSemana => new HorarioTrabalhoMedico
         {
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
             DiaSemana = diaSemana,
             HoraInicio = horaInicio,
             HoraFim = horaFim
-        };
-        _db.HorariosTrabalhoMedico.Add(horario);
+        }).ToList();
+        _db.HorariosTrabalhoMedico.AddRange(horarios);
         await _db.SaveChangesAsync();
 
-        return (ResultadoOperacao.Sucesso, horario.Id);
+        return (ResultadoOperacao.Sucesso, horarios.Select(h => h.Id).ToList());
     }
 
     public async Task<List<HorarioTrabalhoMedico>> ListarPorMedicoAsync(Guid medicoId) =>
@@ -46,7 +49,7 @@ public class HorarioTrabalhoService : IHorarioTrabalhoService
             .OrderBy(h => h.DiaSemana).ThenBy(h => h.HoraInicio)
             .ToListAsync();
 
-    public async Task<ResultadoOperacao> AtualizarAsync(Guid id, DayOfWeek diaSemana, TimeOnly horaInicio, TimeOnly horaFim)
+    public async Task<ResultadoOperacao> AtualizarAsync(Guid id, DiaSemana diaSemana, TimeOnly horaInicio, TimeOnly horaFim)
     {
         var horario = await _db.HorariosTrabalhoMedico.FirstOrDefaultAsync(h => h.Id == id);
         if (horario is null)
@@ -82,7 +85,7 @@ public class HorarioTrabalhoService : IHorarioTrabalhoService
     }
 
     private async Task<bool> ExisteSobreposicaoAsync(
-        Guid medicoId, DayOfWeek diaSemana, TimeOnly horaInicio, TimeOnly horaFim, Guid? exceto = null)
+        Guid medicoId, DiaSemana diaSemana, TimeOnly horaInicio, TimeOnly horaFim, Guid? exceto = null)
     {
         var horariosNoDia = await _db.HorariosTrabalhoMedico
             .Where(h => h.MedicoId == medicoId && h.DiaSemana == diaSemana && h.Id != exceto)
