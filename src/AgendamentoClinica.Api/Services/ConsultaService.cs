@@ -21,8 +21,9 @@ public class ConsultaService : IConsultaService
 
     public async Task<List<DateTime>> CalcularHorariosLivresAsync(Guid medicoId, DateOnly data)
     {
+        var diaSemana = (DiaSemana)(int)data.DayOfWeek;
         var horarios = await _db.HorariosTrabalhoMedico
-            .Where(h => h.MedicoId == medicoId && h.DiaSemana == data.DayOfWeek)
+            .Where(h => h.MedicoId == medicoId && h.DiaSemana == diaSemana)
             .ToListAsync();
         if (horarios.Count == 0)
         {
@@ -64,5 +65,107 @@ public class ConsultaService : IConsultaService
         }
 
         return slotsLivres.OrderBy(s => s).ToList();
+    }
+
+    public async Task<(ResultadoOperacao Resultado, Guid? Id)> CriarAsync(
+        Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId)
+    {
+        if (!await _db.Pacientes.AnyAsync(p => p.Id == pacienteId && p.Ativo)
+            || !await _db.Medicos.AnyAsync(m => m.Id == medicoId && m.Ativo))
+        {
+            return (ResultadoOperacao.NaoEncontrado, null);
+        }
+
+        var fim = dataHora.AddMinutes(DuracaoConsultaMinutos);
+        if (!await EstaDisponivelAsync(medicoId, dataHora, fim, consultaIdExcluida: null))
+        {
+            return (ResultadoOperacao.Duplicado, null);
+        }
+
+        var consulta = new Consulta
+        {
+            Id = Guid.NewGuid(),
+            PacienteId = pacienteId,
+            MedicoId = medicoId,
+            DataHora = dataHora,
+            DuracaoMinutos = DuracaoConsultaMinutos,
+            Status = StatusConsulta.Agendada,
+            Observacoes = observacoes,
+            CriadoPorUsuarioId = criadoPorUsuarioId
+        };
+        _db.Consultas.Add(consulta);
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return (ResultadoOperacao.ConflitoConcorrencia, null);
+        }
+
+        return (ResultadoOperacao.Sucesso, consulta.Id);
+    }
+
+    public async Task<ResultadoOperacao> CancelarAsync(Guid id)
+    {
+        var consulta = await _db.Consultas.FirstOrDefaultAsync(c => c.Id == id);
+        if (consulta is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        consulta.Status = StatusConsulta.Cancelada;
+        consulta.AtualizadoEm = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ResultadoOperacao.Sucesso;
+    }
+
+    public async Task<ResultadoOperacao> ReagendarAsync(Guid id, DateTime novaDataHora)
+    {
+        var consulta = await _db.Consultas.FirstOrDefaultAsync(c => c.Id == id);
+        if (consulta is null || consulta.Status == StatusConsulta.Cancelada)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        var fim = novaDataHora.AddMinutes(consulta.DuracaoMinutos);
+        if (!await EstaDisponivelAsync(consulta.MedicoId, novaDataHora, fim, consultaIdExcluida: id))
+        {
+            return ResultadoOperacao.Duplicado;
+        }
+
+        consulta.DataHora = novaDataHora;
+        consulta.AtualizadoEm = DateTime.UtcNow;
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return ResultadoOperacao.ConflitoConcorrencia;
+        }
+
+        return ResultadoOperacao.Sucesso;
+    }
+
+    private async Task<bool> EstaDisponivelAsync(Guid medicoId, DateTime inicio, DateTime fim, Guid? consultaIdExcluida)
+    {
+        var diaInicio = inicio.Date;
+        var diaFim = diaInicio.AddDays(1);
+        var consultasDoDia = await _db.Consultas
+            .Where(c => c.MedicoId == medicoId && c.Status != StatusConsulta.Cancelada
+                && c.Id != consultaIdExcluida && c.DataHora >= diaInicio && c.DataHora < diaFim)
+            .ToListAsync();
+
+        var ocupado = consultasDoDia.Any(c => inicio < c.DataHora.AddMinutes(c.DuracaoMinutos) && c.DataHora < fim);
+        if (ocupado)
+        {
+            return false;
+        }
+
+        return !await _bloqueioAgendaService.EstaBloqueadoAsync(medicoId, inicio, fim);
     }
 }

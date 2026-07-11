@@ -76,7 +76,7 @@ public class ConsultaServiceTests
         {
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
-            DiaSemana = DayOfWeek.Monday,
+            DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(8, 0),
             HoraFim = new TimeOnly(9, 0)
         });
@@ -101,7 +101,7 @@ public class ConsultaServiceTests
         {
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
-            DiaSemana = DayOfWeek.Monday,
+            DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(8, 0),
             HoraFim = new TimeOnly(9, 0)
         });
@@ -134,7 +134,7 @@ public class ConsultaServiceTests
         {
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
-            DiaSemana = DayOfWeek.Monday,
+            DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(8, 0),
             HoraFim = new TimeOnly(9, 0)
         });
@@ -165,7 +165,7 @@ public class ConsultaServiceTests
         {
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
-            DiaSemana = DayOfWeek.Monday,
+            DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(8, 0),
             HoraFim = new TimeOnly(9, 0)
         });
@@ -188,12 +188,12 @@ public class ConsultaServiceTests
         var medicoId = await CriarMedicoAsync(db);
         db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
         {
-            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DayOfWeek.Monday,
+            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(8, 0), HoraFim = new TimeOnly(8, 20)
         });
         db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
         {
-            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DayOfWeek.Monday,
+            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DiaSemana.Segunda,
             HoraInicio = new TimeOnly(14, 0), HoraFim = new TimeOnly(14, 20)
         });
         await db.SaveChangesAsync();
@@ -204,5 +204,157 @@ public class ConsultaServiceTests
         Assert.Equal(2, slots.Count);
         Assert.Contains(new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), slots);
         Assert.Contains(new DateTime(2026, 7, 13, 14, 0, 0, DateTimeKind.Utc), slots);
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComHorarioLivre_DeveCriarConsulta()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var (resultado, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), "Primeira consulta", Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.NotNull(consulta);
+        Assert.Equal(15, consulta!.DuracaoMinutos);
+        Assert.Equal(StatusConsulta.Agendada, consulta.Status);
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComPacienteInexistente_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var (resultado, id) = await servico.CriarAsync(
+            Guid.NewGuid(), medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+        Assert.Null(id);
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComHorarioJaOcupado_DeveRetornarDuplicado()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        var (resultado, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 5, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.Duplicado, resultado);
+        Assert.Null(id);
+    }
+
+    [Fact]
+    public async Task CriarAsync_ComHorarioBloqueado_DeveRetornarDuplicado()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var bloqueioService = new BloqueioAgendaService(db);
+        await bloqueioService.CriarAsync(
+            medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 13, 9, 0, 0, DateTimeKind.Utc),
+            TipoRecorrenciaBloqueio.Nenhuma, null, "Bloqueado");
+        var servico = new ConsultaService(db, bloqueioService);
+
+        var (resultado, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.Duplicado, resultado);
+        Assert.Null(id);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_ComIdExistente_DeveMarcarComoCancelada()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        var resultado = await servico.CancelarAsync(id!.Value);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.Equal(StatusConsulta.Cancelada, consulta!.Status);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_LiberaOHorarioParaNovaConsulta()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+        await servico.CancelarAsync(id!.Value);
+
+        var (resultado, novoId) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        Assert.NotNull(novoId);
+    }
+
+    [Fact]
+    public async Task ReagendarAsync_ParaHorarioLivre_DeveAtualizarDataHora()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        var resultado = await servico.ReagendarAsync(id!.Value, new DateTime(2026, 7, 13, 10, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.Equal(new DateTime(2026, 7, 13, 10, 0, 0, DateTimeKind.Utc), consulta!.DataHora);
+    }
+
+    [Fact]
+    public async Task ReagendarAsync_ParaHorarioOcupadoPorOutraConsulta_DeveRetornarDuplicado()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        await servico.CriarAsync(pacienteId, medicoId, new DateTime(2026, 7, 13, 10, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+
+        var resultado = await servico.ReagendarAsync(id!.Value, new DateTime(2026, 7, 13, 10, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ResultadoOperacao.Duplicado, resultado);
+    }
+
+    [Fact]
+    public async Task ReagendarAsync_ComConsultaCancelada_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+        await servico.CancelarAsync(id!.Value);
+
+        var resultado = await servico.ReagendarAsync(id.Value, new DateTime(2026, 7, 13, 10, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
     }
 }

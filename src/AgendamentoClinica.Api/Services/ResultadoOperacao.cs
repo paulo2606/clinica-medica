@@ -4,5 +4,6 @@ public enum ResultadoOperacao
 {
     Sucesso,
     NaoEncontrado,
-    Duplicado
+    Duplicado,
+    ConflitoConcorrencia
 }
