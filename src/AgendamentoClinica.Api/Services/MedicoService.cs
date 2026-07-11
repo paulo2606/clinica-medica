@@ -106,6 +106,12 @@ public class MedicoService : IMedicoService
     public Task<Medico?> ObterAsync(Guid id) =>
         _db.Medicos.Include(m => m.Usuario).Include(m => m.Especialidade).FirstOrDefaultAsync(m => m.Id == id);
 
+    public async Task<Guid?> ObterMedicoIdPorUsuarioAsync(Guid usuarioId)
+    {
+        var medico = await _db.Medicos.FirstOrDefaultAsync(m => m.UsuarioId == usuarioId);
+        return medico?.Id;
+    }
+
     public async Task<ResultadoOperacao> AtualizarAsync(Guid id, string crm, Guid especialidadeId)
     {
         var medico = await _db.Medicos.FirstOrDefaultAsync(m => m.Id == id);

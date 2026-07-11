@@ -10,4 +10,5 @@ public interface IMedicoService
     Task<Medico?> ObterAsync(Guid id);
     Task<ResultadoOperacao> AtualizarAsync(Guid id, string crm, Guid especialidadeId);
     Task<ResultadoOperacao> DesativarAsync(Guid id);
+    Task<Guid?> ObterMedicoIdPorUsuarioAsync(Guid usuarioId);
 }
