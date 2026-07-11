@@ -12,11 +12,11 @@ using Xunit;
 namespace AgendamentoClinica.Tests.Integration;
 
 [Collection("BancoDeTeste")]
-public class EspecialidadesControllerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
+public class HorariosTrabalhoControllerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
 {
     private readonly CustomWebApplicationFactory _factory;
 
-    public EspecialidadesControllerTests(CustomWebApplicationFactory factory)
+    public HorariosTrabalhoControllerTests(CustomWebApplicationFactory factory)
     {
         _factory = factory;
     }
@@ -26,6 +26,7 @@ public class EspecialidadesControllerTests : IClassFixture<CustomWebApplicationF
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
+        db.HorariosTrabalhoMedico.RemoveRange(db.HorariosTrabalhoMedico);
         db.Medicos.RemoveRange(db.Medicos);
         db.Especialidades.RemoveRange(db.Especialidades);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);
@@ -46,6 +47,7 @@ public class EspecialidadesControllerTests : IClassFixture<CustomWebApplicationF
             Id = Guid.NewGuid(),
             Nome = "Usuário Teste",
             Email = email,
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
             SenhaHash = senhaService.GerarHash("senha123"),
             Papel = papel,
             Ativo = true
@@ -57,52 +59,68 @@ public class EspecialidadesControllerTests : IClassFixture<CustomWebApplicationF
         return corpo!["accessToken"];
     }
 
+    private async Task<Guid> CriarMedicoAsync()
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var especialidade = new Especialidade { Id = Guid.NewGuid(), Nome = $"Especialidade-{Guid.NewGuid()}" };
+        db.Especialidades.Add(especialidade);
+        var usuario = new Usuario
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Bruno Medico",
+            Email = $"{Guid.NewGuid()}@clinica.com",
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
+            SenhaHash = "hash",
+            Papel = PapelUsuario.Medico,
+            Ativo = true
+        };
+        db.Usuarios.Add(usuario);
+        var medico = new Medico { Id = Guid.NewGuid(), UsuarioId = usuario.Id, EspecialidadeId = especialidade.Id, Crm = $"CRM{Random.Shared.Next(1000000, 9999999)}" };
+        db.Medicos.Add(medico);
+        await db.SaveChangesAsync();
+        return medico.Id;
+    }
+
     [Fact]
     public async Task Criar_ComoAdmin_DeveRetornar201()
     {
         var cliente = _factory.CreateClient();
         var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Admin);
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var medicoId = await CriarMedicoAsync();
 
-        var resposta = await cliente.PostAsJsonAsync("/api/especialidades", new CriarEspecialidadeRequest("Cardiologia"));
+        var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
+            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0)));
 
         Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
     }
 
     [Fact]
-    public async Task Criar_ComoRecepcao_DeveRetornar403()
+    public async Task Criar_ComoMedico_DeveRetornar403()
     {
         var cliente = _factory.CreateClient();
-        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Medico);
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var medicoId = await CriarMedicoAsync();
 
-        var resposta = await cliente.PostAsJsonAsync("/api/especialidades", new CriarEspecialidadeRequest("Cardiologia"));
+        var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
+            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0)));
 
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
     }
 
     [Fact]
-    public async Task Criar_SemToken_DeveRetornar401()
-    {
-        var cliente = _factory.CreateClient();
-
-        var resposta = await cliente.PostAsJsonAsync("/api/especialidades", new CriarEspecialidadeRequest("Cardiologia"));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
-    }
-
-    [Fact]
-    public async Task Listar_ComoAdmin_DeveRetornarApenasAtivasPorPadrao()
+    public async Task Criar_ComHoraInicioDepoisDeHoraFim_DeveRetornar400()
     {
         var cliente = _factory.CreateClient();
         var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Admin);
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        await cliente.PostAsJsonAsync("/api/especialidades", new CriarEspecialidadeRequest("Cardiologia"));
+        var medicoId = await CriarMedicoAsync();
 
-        var resposta = await cliente.GetAsync("/api/especialidades");
+        var resposta = await cliente.PostAsJsonAsync("/api/horarios-trabalho",
+            new CriarHorarioTrabalhoRequest(medicoId, DayOfWeek.Monday, new TimeOnly(12, 0), new TimeOnly(8, 0)));
 
-        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
-        var lista = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
-        Assert.Single(lista!);
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
     }
 }
