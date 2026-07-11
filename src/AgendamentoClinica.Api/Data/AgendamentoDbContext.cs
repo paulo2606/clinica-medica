@@ -15,6 +15,7 @@ public class AgendamentoDbContext : DbContext
     public DbSet<HorarioTrabalhoMedico> HorariosTrabalhoMedico => Set<HorarioTrabalhoMedico>();
     public DbSet<Paciente> Pacientes => Set<Paciente>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
+    public DbSet<BloqueioAgendaMedico> BloqueiosAgendaMedico => Set<BloqueioAgendaMedico>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -162,6 +163,26 @@ public class AgendamentoDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(c => c.CriadoPorUsuarioId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BloqueioAgendaMedico>(entidade =>
+        {
+            entidade.ToTable("bloqueios_agenda_medico");
+            entidade.HasKey(b => b.Id);
+            entidade.Property(b => b.Id).HasColumnName("id");
+            entidade.Property(b => b.MedicoId).HasColumnName("medico_id");
+            entidade.Property(b => b.DataHoraInicio).HasColumnName("data_hora_inicio");
+            entidade.Property(b => b.DataHoraFim).HasColumnName("data_hora_fim");
+            entidade.Property(b => b.TipoRecorrencia).HasColumnName("tipo_recorrencia").HasConversion<string>().HasMaxLength(15);
+            entidade.Property(b => b.RecorrenciaAte).HasColumnName("recorrencia_ate");
+            entidade.Property(b => b.RegraRecorrencia).HasColumnName("regra_recorrencia");
+            entidade.Property(b => b.Motivo).HasColumnName("motivo").HasMaxLength(200);
+            entidade.Property(b => b.CriadoEm).HasColumnName("criado_em");
+
+            entidade.HasOne(b => b.Medico)
+                .WithMany()
+                .HasForeignKey(b => b.MedicoId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
