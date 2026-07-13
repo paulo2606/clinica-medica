@@ -12,6 +12,7 @@ public class Consulta
     public Guid CriadoPorUsuarioId { get; set; }
     public DateTime CriadoEm { get; set; } = DateTime.UtcNow;
     public DateTime AtualizadoEm { get; set; } = DateTime.UtcNow;
+    public DateTime? LembreteEnviadoEm { get; set; }
 
     public Paciente? Paciente { get; set; }
     public Medico? Medico { get; set; }
