@@ -5,6 +5,7 @@ using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Middleware;
 using AgendamentoClinica.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -97,6 +98,14 @@ builder.Services.AddSwaggerGen(opcoes =>
 });
 
 var app = builder.Build();
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardLimit = null,
+    KnownNetworks = { },
+    KnownProxies = { }
+});
 
 if (app.Environment.IsDevelopment())
 {
