@@ -27,6 +27,7 @@ public class BloqueiosAgendaControllerTests : IClassFixture<CustomWebApplication
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
         db.BloqueiosAgendaMedico.RemoveRange(db.BloqueiosAgendaMedico);
+        db.Consultas.RemoveRange(db.Consultas);
         db.Medicos.RemoveRange(db.Medicos);
         db.Especialidades.RemoveRange(db.Especialidades);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);

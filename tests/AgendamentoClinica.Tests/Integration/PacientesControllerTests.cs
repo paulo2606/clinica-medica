@@ -27,6 +27,7 @@ public class PacientesControllerTests : IClassFixture<CustomWebApplicationFactor
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
+        db.Consultas.RemoveRange(db.Consultas);
         db.Pacientes.RemoveRange(db.Pacientes);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);
         db.Usuarios.RemoveRange(db.Usuarios);

@@ -8,6 +8,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     public const string ConexaoTeste =
         "Host=localhost;Port=5432;Database=agendamento_test;Username=postgres;Password=1234";
+    public const string ChaveTwilioTeste = "chave-de-teste-twilio";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -20,7 +21,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Jwt:SecretKey"] = "chave-de-teste-com-pelo-menos-32-bytes-1234",
                 ["Jwt:Issuer"] = "AgendamentoClinica",
                 ["Jwt:Audience"] = "AgendamentoClinica.Cliente",
-                ["RateLimiting:AuthSensivel:PermitLimit"] = "1000"
+                ["RateLimiting:AuthSensivel:PermitLimit"] = "1000",
+                ["Twilio:AuthToken"] = ChaveTwilioTeste
             });
         });
     }

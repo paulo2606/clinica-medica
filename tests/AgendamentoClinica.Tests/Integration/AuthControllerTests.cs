@@ -28,6 +28,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
         await db.Database.MigrateAsync();
         db.TokensConviteSenha.RemoveRange(db.TokensConviteSenha);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);
+        db.Consultas.RemoveRange(db.Consultas);
         db.Usuarios.RemoveRange(db.Usuarios);
         await db.SaveChangesAsync();
     }

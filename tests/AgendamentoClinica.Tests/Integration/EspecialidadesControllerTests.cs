@@ -26,6 +26,7 @@ public class EspecialidadesControllerTests : IClassFixture<CustomWebApplicationF
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
+        db.Consultas.RemoveRange(db.Consultas);
         db.Medicos.RemoveRange(db.Medicos);
         db.Especialidades.RemoveRange(db.Especialidades);
         db.TokensRenovacao.RemoveRange(db.TokensRenovacao);

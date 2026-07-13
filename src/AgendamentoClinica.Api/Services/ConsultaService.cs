@@ -151,6 +151,24 @@ public class ConsultaService : IConsultaService
         return ResultadoOperacao.Sucesso;
     }
 
+    public async Task<ResultadoOperacao> ConfirmarAsync(Guid id)
+    {
+        var consulta = await _db.Consultas.FirstOrDefaultAsync(c => c.Id == id);
+        if (consulta is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        consulta.Status = StatusConsulta.Confirmada;
+        consulta.AtualizadoEm = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ResultadoOperacao.Sucesso;
+    }
+
+    public Task<Consulta?> ObterPorLembreteMessageSidAsync(string messageSid) =>
+        _db.Consultas.FirstOrDefaultAsync(c => c.LembreteMessageSid == messageSid);
+
     public async Task<List<Consulta>> ListarAsync(Guid? medicoId, DateOnly? data, StatusConsulta? status)
     {
         var query = _db.Consultas
