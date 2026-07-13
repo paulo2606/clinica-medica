@@ -149,6 +149,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(c => c.CriadoEm).HasColumnName("criado_em");
             entidade.Property(c => c.AtualizadoEm).HasColumnName("atualizado_em");
             entidade.Property(c => c.LembreteEnviadoEm).HasColumnName("lembrete_enviado_em");
+            entidade.Property(c => c.LembreteMessageSid).HasColumnName("lembrete_message_sid").HasMaxLength(50);
 
             entidade.HasOne(c => c.Paciente)
                 .WithMany()
