@@ -35,4 +35,12 @@ public class TwilioWhatsAppService : IWhatsAppService
 
         return mensagem.Sid;
     }
+
+    public async Task EnviarMensagemLivreAsync(string telefoneDestino, string mensagem)
+    {
+        await MessageResource.CreateAsync(
+            from: new PhoneNumber(_configuracao["Twilio:WhatsAppFrom"]),
+            to: new PhoneNumber($"whatsapp:{telefoneDestino}"),
+            body: mensagem);
+    }
 }

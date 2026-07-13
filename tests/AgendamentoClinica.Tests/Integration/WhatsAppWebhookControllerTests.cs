@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Models;
+using AgendamentoClinica.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace AgendamentoClinica.Tests.Integration;
@@ -14,7 +16,23 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
 {
     private const string UrlWebhook = "http://localhost/api/whatsapp/webhook";
 
+    private class WhatsAppServiceFake : IWhatsAppService
+    {
+        public List<(string Telefone, string Mensagem)> MensagensEnviadas { get; } = [];
+
+        public Task<string> EnviarLembreteConsultaAsync(
+            string telefoneDestino, string nomePaciente, string data, string hora, string nomeMedico, string endereco) =>
+            Task.FromResult($"SM{Guid.NewGuid():N}");
+
+        public Task EnviarMensagemLivreAsync(string telefoneDestino, string mensagem)
+        {
+            MensagensEnviadas.Add((telefoneDestino, mensagem));
+            return Task.CompletedTask;
+        }
+    }
+
     private readonly CustomWebApplicationFactory _factory;
+    private readonly WhatsAppServiceFake _whatsApp = new();
 
     public WhatsAppWebhookControllerTests(CustomWebApplicationFactory factory)
     {
@@ -73,7 +91,15 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
 
     private async Task<HttpResponseMessage> EnviarWebhookAsync(Dictionary<string, string> parametros, string? assinatura = null)
     {
-        var cliente = _factory.CreateClient();
+        var fabrica = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(servicos =>
+            {
+                servicos.RemoveAll<IWhatsAppService>();
+                servicos.AddSingleton<IWhatsAppService>(_whatsApp);
+            });
+        });
+        var cliente = fabrica.CreateClient();
         assinatura ??= CalcularAssinatura(UrlWebhook, parametros, CustomWebApplicationFactory.ChaveTwilioTeste);
         var requisicao = new HttpRequestMessage(HttpMethod.Post, "/api/whatsapp/webhook")
         {
@@ -100,12 +126,13 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
     }
 
     [Fact]
-    public async Task Webhook_ComBotaoConfirmar_DeveMudarStatusParaConfirmada()
+    public async Task Webhook_ComBotaoConfirmar_DeveMudarStatusParaConfirmadaEResponderAoPaciente()
     {
         var messageSid = $"SM{Guid.NewGuid():N}";
         var consultaId = await CriarConsultaComLembreteEnviadoAsync(messageSid);
         var parametros = new Dictionary<string, string>
         {
+            ["From"] = "whatsapp:+5541988887766",
             ["OriginalRepliedMessageSid"] = messageSid,
             ["ButtonPayload"] = "confirmar"
         };
@@ -117,17 +144,21 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         var consulta = await db.Consultas.FindAsync(consultaId);
         Assert.Equal(StatusConsulta.Confirmada, consulta!.Status);
+        var mensagem = Assert.Single(_whatsApp.MensagensEnviadas);
+        Assert.Equal("+5541988887766", mensagem.Telefone);
+        Assert.Contains("confirmada", mensagem.Mensagem, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task Webhook_ComBotaoCancelar_DeveMudarStatusParaCancelada()
+    public async Task Webhook_ComBotaoRemarcar_DeveMudarStatusParaCanceladaEResponderAoPaciente()
     {
         var messageSid = $"SM{Guid.NewGuid():N}";
         var consultaId = await CriarConsultaComLembreteEnviadoAsync(messageSid);
         var parametros = new Dictionary<string, string>
         {
+            ["From"] = "whatsapp:+5541988887766",
             ["OriginalRepliedMessageSid"] = messageSid,
-            ["ButtonPayload"] = "cancelar"
+            ["ButtonPayload"] = "remarcar"
         };
 
         var resposta = await EnviarWebhookAsync(parametros);
@@ -137,6 +168,9 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         var consulta = await db.Consultas.FindAsync(consultaId);
         Assert.Equal(StatusConsulta.Cancelada, consulta!.Status);
+        var mensagem = Assert.Single(_whatsApp.MensagensEnviadas);
+        Assert.Equal("+5541988887766", mensagem.Telefone);
+        Assert.Contains("cancelada", mensagem.Mensagem, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

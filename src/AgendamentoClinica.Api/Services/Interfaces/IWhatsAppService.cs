@@ -4,4 +4,5 @@ public interface IWhatsAppService
 {
     Task<string> EnviarLembreteConsultaAsync(
         string telefoneDestino, string nomePaciente, string data, string hora, string nomeMedico, string endereco);
+    Task EnviarMensagemLivreAsync(string telefoneDestino, string mensagem);
 }

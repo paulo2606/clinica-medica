@@ -21,6 +21,8 @@ public class LembreteConsultaBackgroundServiceTests
             TelefonesChamados.Add(telefoneDestino);
             return Task.FromResult($"SM{Guid.NewGuid():N}");
         }
+
+        public Task EnviarMensagemLivreAsync(string telefoneDestino, string mensagem) => Task.CompletedTask;
     }
 
     private static (IServiceScopeFactory ScopeFactory, WhatsAppServiceFake WhatsApp, DbContextOptions<AgendamentoDbContext> Opcoes) CriarAmbiente()

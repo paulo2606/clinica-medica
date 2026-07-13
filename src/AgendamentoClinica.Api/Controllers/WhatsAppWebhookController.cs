@@ -9,13 +9,15 @@ namespace AgendamentoClinica.Api.Controllers;
 public class WhatsAppWebhookController : ControllerBase
 {
     private readonly IConsultaService _consultaService;
+    private readonly IWhatsAppService _whatsAppService;
     private readonly IConfiguration _configuracao;
     private readonly ILogger<WhatsAppWebhookController> _logger;
 
     public WhatsAppWebhookController(
-        IConsultaService consultaService, IConfiguration configuracao, ILogger<WhatsAppWebhookController> logger)
+        IConsultaService consultaService, IWhatsAppService whatsAppService, IConfiguration configuracao, ILogger<WhatsAppWebhookController> logger)
     {
         _consultaService = consultaService;
+        _whatsAppService = whatsAppService;
         _configuracao = configuracao;
         _logger = logger;
     }
@@ -45,17 +47,32 @@ public class WhatsAppWebhookController : ControllerBase
             return Ok();
         }
 
+        string? respostaAoPaciente = null;
         if (acao == "confirmar")
         {
             await _consultaService.ConfirmarAsync(consulta.Id);
+            respostaAoPaciente = $"Consulta confirmada para {consulta.DataHora:dd/MM/yyyy} às {consulta.DataHora:HH:mm}. Te esperamos!";
         }
-        else if (acao == "cancelar")
+        else if (acao == "remarcar")
         {
             await _consultaService.CancelarAsync(consulta.Id);
+            respostaAoPaciente = "Sua consulta foi cancelada. Entre em contato com a clínica se quiser remarcar.";
         }
         else
         {
             _logger.LogWarning("ButtonPayload desconhecido recebido no webhook do WhatsApp: {Acao}", acao);
+        }
+
+        if (respostaAoPaciente is not null && parametros.TryGetValue("From", out var telefoneOrigem))
+        {
+            try
+            {
+                await _whatsAppService.EnviarMensagemLivreAsync(telefoneOrigem.Replace("whatsapp:", ""), respostaAoPaciente);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Falha ao enviar confirmação de resposta pro paciente da consulta {ConsultaId}", consulta.Id);
+            }
         }
 
         return Ok();
