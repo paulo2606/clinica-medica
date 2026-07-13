@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using AgendamentoClinica.Api.Dtos;
+using AgendamentoClinica.Api.Models;
 using AgendamentoClinica.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,16 +10,19 @@ namespace AgendamentoClinica.Api.Controllers;
 
 [ApiController]
 [Route("api/consultas")]
-[Authorize(Roles = "Admin,Recepcao")]
+[Authorize]
 public class ConsultasController : ControllerBase
 {
     private readonly IConsultaService _consultaService;
+    private readonly IMedicoService _medicoService;
 
-    public ConsultasController(IConsultaService consultaService)
+    public ConsultasController(IConsultaService consultaService, IMedicoService medicoService)
     {
         _consultaService = consultaService;
+        _medicoService = medicoService;
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpGet("horarios-livres")]
     public async Task<IActionResult> HorariosLivres([FromQuery] Guid medicoId, [FromQuery] DateOnly data)
     {
@@ -26,6 +30,38 @@ public class ConsultasController : ControllerBase
         return Ok(horarios);
     }
 
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
+    [HttpGet]
+    public async Task<IActionResult> Listar([FromQuery] Guid? medicoId, [FromQuery] DateOnly? data, [FromQuery] StatusConsulta? status)
+    {
+        var medicoIdEfetivo = medicoId;
+        if (User.IsInRole("Medico"))
+        {
+            var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+            medicoIdEfetivo = await _medicoService.ObterMedicoIdPorUsuarioAsync(usuarioId);
+            if (medicoIdEfetivo is null)
+            {
+                return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+            }
+        }
+
+        var consultas = await _consultaService.ListarAsync(medicoIdEfetivo, data, status);
+
+        return Ok(consultas.Select(c => new
+        {
+            c.Id,
+            c.PacienteId,
+            PacienteNome = c.Paciente!.Nome,
+            c.MedicoId,
+            MedicoNome = c.Medico!.Usuario!.Nome,
+            c.DataHora,
+            c.DuracaoMinutos,
+            c.Status,
+            c.Observacoes
+        }));
+    }
+
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] CriarConsultaRequest requisicao)
     {
@@ -42,6 +78,7 @@ public class ConsultasController : ControllerBase
         };
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPatch("{id:guid}/cancelar")]
     public async Task<IActionResult> Cancelar(Guid id)
     {
@@ -49,6 +86,7 @@ public class ConsultasController : ControllerBase
         return resultado == ResultadoOperacao.NaoEncontrado ? NotFound() : NoContent();
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPatch("{id:guid}/reagendar")]
     public async Task<IActionResult> Reagendar(Guid id, [FromBody] ReagendarConsultaRequest requisicao)
     {

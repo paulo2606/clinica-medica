@@ -53,7 +53,7 @@ public class ConsultaService : IConsultaService
                 var ocupado = consultasDoDia.Any(c =>
                     candidato < c.DataHora.AddMinutes(c.DuracaoMinutos) && c.DataHora < fimCandidato);
                 var bloqueado = bloqueios.Any(b =>
-                    RecorrenciaBloqueio.OcorreEm(b.DataHoraInicio, b.DataHoraFim, b.RegraRecorrencia, candidato, fimCandidato));
+                    RecorrenciaBloqueio.OcorreEm(b.DataHoraInicio, b.DataHoraFim, b.RegraRecorrencia, candidato - TimeSpan.FromMinutes(BufferMinutos), fimCandidato));
 
                 if (!ocupado && !bloqueado)
                 {
@@ -151,6 +151,34 @@ public class ConsultaService : IConsultaService
         return ResultadoOperacao.Sucesso;
     }
 
+    public async Task<List<Consulta>> ListarAsync(Guid? medicoId, DateOnly? data, StatusConsulta? status)
+    {
+        var query = _db.Consultas
+            .Include(c => c.Paciente)
+            .Include(c => c.Medico!)
+                .ThenInclude(m => m.Usuario)
+            .AsQueryable();
+
+        if (medicoId.HasValue)
+        {
+            query = query.Where(c => c.MedicoId == medicoId.Value);
+        }
+
+        if (data.HasValue)
+        {
+            var inicioDia = data.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var fimDia = inicioDia.AddDays(1);
+            query = query.Where(c => c.DataHora >= inicioDia && c.DataHora < fimDia);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(c => c.Status == status.Value);
+        }
+
+        return await query.OrderBy(c => c.DataHora).ToListAsync();
+    }
+
     private async Task<bool> EstaDisponivelAsync(Guid medicoId, DateTime inicio, DateTime fim, Guid? consultaIdExcluida)
     {
         var diaInicio = inicio.Date;
@@ -166,6 +194,6 @@ public class ConsultaService : IConsultaService
             return false;
         }
 
-        return !await _bloqueioAgendaService.EstaBloqueadoAsync(medicoId, inicio, fim);
+        return !await _bloqueioAgendaService.EstaBloqueadoAsync(medicoId, inicio - TimeSpan.FromMinutes(BufferMinutos), fim);
     }
 }

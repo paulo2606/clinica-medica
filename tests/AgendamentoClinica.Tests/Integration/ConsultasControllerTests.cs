@@ -92,6 +92,34 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         return medico.Id;
     }
 
+    private async Task<(Guid MedicoId, string Token)> CriarMedicoELogarAsync(HttpClient cliente)
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var senhaService = escopo.ServiceProvider.GetRequiredService<ISenhaService>();
+        var especialidade = new Especialidade { Id = Guid.NewGuid(), Nome = $"Especialidade-{Guid.NewGuid()}" };
+        db.Especialidades.Add(especialidade);
+        var email = $"{Guid.NewGuid()}@clinica.com";
+        var usuario = new Usuario
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Bruno Medico",
+            Email = email,
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
+            SenhaHash = senhaService.GerarHash("senha123"),
+            Papel = PapelUsuario.Medico,
+            Ativo = true
+        };
+        db.Usuarios.Add(usuario);
+        var medico = new Medico { Id = Guid.NewGuid(), UsuarioId = usuario.Id, EspecialidadeId = especialidade.Id, Crm = $"CRM{Random.Shared.Next(1000000, 9999999)}" };
+        db.Medicos.Add(medico);
+        await db.SaveChangesAsync();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "senha123"));
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return (medico.Id, corpo!["accessToken"]);
+    }
+
     private async Task<Guid> CriarPacienteAsync()
     {
         using var escopo = _factory.Services.CreateScope();
@@ -221,5 +249,71 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         var resposta = await cliente.GetAsync($"/api/consultas/horarios-livres?medicoId={medicoId}&data=2026-07-13");
 
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Listar_ComoRecepcao_DeveRetornarTodasAsConsultas()
+    {
+        var cliente = _factory.CreateClient();
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        var (medicoId1, _) = await CriarMedicoELogarAsync(cliente);
+        var (medicoId2, _) = await CriarMedicoELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId1, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId2, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+
+        var resposta = await cliente.GetAsync("/api/consultas");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var consultas = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        Assert.Equal(2, consultas!.Count);
+    }
+
+    [Fact]
+    public async Task Listar_ComoMedico_DeveRetornarSoAsPropriasConsultasMesmoPassandoOutroMedicoIdNaQuery()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenMedico) = await CriarMedicoELogarAsync(cliente);
+        var (outroMedicoId, _) = await CriarMedicoELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, outroMedicoId, new DateTime(2026, 7, 13, 9, 0, 0, DateTimeKind.Utc), null));
+
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+        var resposta = await cliente.GetAsync($"/api/consultas?medicoId={outroMedicoId}");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var consultas = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        Assert.Single(consultas!);
+    }
+
+    [Fact]
+    public async Task Listar_ComFiltroDeStatus_DeveRetornarSoAsConsultasComEsseStatus()
+    {
+        var cliente = _factory.CreateClient();
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        var (medicoId, _) = await CriarMedicoELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+        await cliente.PatchAsync($"/api/consultas/{corpo!["id"]}/cancelar", null);
+        await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 9, 0, 0, DateTimeKind.Utc), null));
+
+        var resposta = await cliente.GetAsync("/api/consultas?status=Cancelada");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var consultas = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        Assert.Single(consultas!);
     }
 }

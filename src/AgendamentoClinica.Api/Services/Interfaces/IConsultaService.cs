@@ -1,3 +1,5 @@
+using AgendamentoClinica.Api.Models;
+
 namespace AgendamentoClinica.Api.Services;
 
 public interface IConsultaService
@@ -7,4 +9,5 @@ public interface IConsultaService
         Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId);
     Task<ResultadoOperacao> CancelarAsync(Guid id);
     Task<ResultadoOperacao> ReagendarAsync(Guid id, DateTime novaDataHora);
+    Task<List<Consulta>> ListarAsync(Guid? medicoId, DateOnly? data, StatusConsulta? status);
 }
