@@ -355,6 +355,42 @@ public class ConsultaServiceTests
     }
 
     [Fact]
+    public async Task ConfirmarAsync_ComConsultaJaCancelada_NaoDeveReverterStatus()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+        await servico.CancelarAsync(id!.Value);
+
+        var resultado = await servico.ConfirmarAsync(id.Value);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.Equal(StatusConsulta.Cancelada, consulta!.Status);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_ComConsultaJaConfirmada_DeveCancelar()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+        var (_, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid());
+        await servico.ConfirmarAsync(id!.Value);
+
+        var resultado = await servico.CancelarAsync(id.Value);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.Equal(StatusConsulta.Cancelada, consulta!.Status);
+    }
+
+    [Fact]
     public async Task ReagendarAsync_ParaHorarioLivre_DeveAtualizarDataHora()
     {
         var db = CriarDbContext();

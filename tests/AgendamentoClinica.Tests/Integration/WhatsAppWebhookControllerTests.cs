@@ -5,6 +5,7 @@ using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Models;
 using AgendamentoClinica.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -89,7 +90,8 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
         return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(dados)));
     }
 
-    private async Task<HttpResponseMessage> EnviarWebhookAsync(Dictionary<string, string> parametros, string? assinatura = null)
+    private async Task<HttpResponseMessage> EnviarWebhookAsync(
+        Dictionary<string, string> parametros, string? assinatura = null, string? authTokenOverride = null)
     {
         var fabrica = _factory.WithWebHostBuilder(builder =>
         {
@@ -98,6 +100,16 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
                 servicos.RemoveAll<IWhatsAppService>();
                 servicos.AddSingleton<IWhatsAppService>(_whatsApp);
             });
+            if (authTokenOverride is not null)
+            {
+                builder.ConfigureAppConfiguration((_, configuracao) =>
+                {
+                    configuracao.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Twilio:AuthToken"] = authTokenOverride
+                    });
+                });
+            }
         });
         var cliente = fabrica.CreateClient();
         assinatura ??= CalcularAssinatura(UrlWebhook, parametros, CustomWebApplicationFactory.ChaveTwilioTeste);
@@ -171,6 +183,48 @@ public class WhatsAppWebhookControllerTests : IClassFixture<CustomWebApplication
         var mensagem = Assert.Single(_whatsApp.MensagensEnviadas);
         Assert.Equal("+5541988887766", mensagem.Telefone);
         Assert.Contains("cancelada", mensagem.Mensagem, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Webhook_ComAuthTokenNaoConfigurado_DeveRetornar500()
+    {
+        var parametros = new Dictionary<string, string>
+        {
+            ["OriginalRepliedMessageSid"] = $"SM{Guid.NewGuid():N}",
+            ["ButtonPayload"] = "confirmar"
+        };
+
+        var resposta = await EnviarWebhookAsync(parametros, assinatura: "qualquer-coisa", authTokenOverride: "");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_ComConsultaJaCancelada_NaoDeveReverterAoReceberConfirmar()
+    {
+        var messageSid = $"SM{Guid.NewGuid():N}";
+        var consultaId = await CriarConsultaComLembreteEnviadoAsync(messageSid);
+        using (var escopo = _factory.Services.CreateScope())
+        {
+            var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+            var consulta = await db.Consultas.FindAsync(consultaId);
+            consulta!.Status = StatusConsulta.Cancelada;
+            await db.SaveChangesAsync();
+        }
+        var parametros = new Dictionary<string, string>
+        {
+            ["From"] = "whatsapp:+5541988887766",
+            ["OriginalRepliedMessageSid"] = messageSid,
+            ["ButtonPayload"] = "confirmar"
+        };
+
+        var resposta = await EnviarWebhookAsync(parametros);
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        using var escopoVerificacao = _factory.Services.CreateScope();
+        var dbVerificacao = escopoVerificacao.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var consultaFinal = await dbVerificacao.Consultas.FindAsync(consultaId);
+        Assert.Equal(StatusConsulta.Cancelada, consultaFinal!.Status);
     }
 
     [Fact]

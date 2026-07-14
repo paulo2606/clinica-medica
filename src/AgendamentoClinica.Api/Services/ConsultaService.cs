@@ -115,6 +115,11 @@ public class ConsultaService : IConsultaService
             return ResultadoOperacao.NaoEncontrado;
         }
 
+        if (consulta.Status is StatusConsulta.Cancelada or StatusConsulta.Concluida or StatusConsulta.Faltou)
+        {
+            return ResultadoOperacao.Sucesso;
+        }
+
         consulta.Status = StatusConsulta.Cancelada;
         consulta.AtualizadoEm = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -157,6 +162,11 @@ public class ConsultaService : IConsultaService
         if (consulta is null)
         {
             return ResultadoOperacao.NaoEncontrado;
+        }
+
+        if (consulta.Status is StatusConsulta.Cancelada or StatusConsulta.Concluida or StatusConsulta.Faltou)
+        {
+            return ResultadoOperacao.Sucesso;
         }
 
         consulta.Status = StatusConsulta.Confirmada;

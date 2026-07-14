@@ -29,9 +29,18 @@ public class WhatsAppWebhookController : ControllerBase
         var assinatura = Request.Headers["X-Twilio-Signature"].ToString();
         var url = $"{Request.Scheme}://{Request.Host}{Request.Path}";
 
-        var validador = new RequestValidator(_configuracao["Twilio:AuthToken"] ?? "");
+        var authToken = _configuracao["Twilio:AuthToken"];
+        if (string.IsNullOrEmpty(authToken))
+        {
+            _logger.LogError("Twilio:AuthToken não configurado — rejeitando webhook do WhatsApp.");
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+
+        var validador = new RequestValidator(authToken);
         if (!validador.Validate(url, parametros, assinatura))
         {
+            _logger.LogWarning(
+                "Assinatura inválida no webhook do WhatsApp. IP: {Ip}", HttpContext.Connection.RemoteIpAddress);
             return Unauthorized();
         }
 
