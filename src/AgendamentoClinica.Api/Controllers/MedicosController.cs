@@ -1,5 +1,8 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Services;
+using AgendamentoClinica.Api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +17,74 @@ public class MedicosController : ControllerBase
     public MedicosController(IMedicoService medicoService)
     {
         _medicoService = medicoService;
+    }
+
+    [Authorize(Roles = "Medico")]
+    [HttpGet("meu")]
+    public async Task<IActionResult> ObterMeu()
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+        }
+
+        var medico = await _medicoService.ObterAsync(medicoId.Value);
+        return medico is null ? NotFound() : Ok(MapearParaResposta(medico));
+    }
+
+    [Authorize(Roles = "Medico")]
+    [HttpPut("meu")]
+    public async Task<IActionResult> AtualizarMeu([FromBody] AtualizarMeuPerfilRequest requisicao)
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+        }
+
+        var resultado = await _medicoService.AtualizarMeuPerfilAsync(medicoId.Value, requisicao.Nome, requisicao.EspecialidadeId);
+        return resultado == ResultadoOperacao.NaoEncontrado
+            ? BadRequest(new { mensagem = "Especialidade não encontrada ou inativa." })
+            : NoContent();
+    }
+
+    [Authorize(Roles = "Medico")]
+    [RequestSizeLimit(ValidadorImagem.TamanhoMaximoBytes)]
+    [HttpPut("meu/foto")]
+    public async Task<IActionResult> AtualizarMinhaFoto(IFormFile foto)
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+        }
+
+        if (foto is null || !ValidadorImagem.TamanhoValido(foto.Length))
+        {
+            return BadRequest(new { mensagem = "Envie uma imagem JPEG ou PNG de até 3MB." });
+        }
+
+        using var memoria = new MemoryStream();
+        await foto.CopyToAsync(memoria);
+        var conteudo = memoria.ToArray();
+
+        var extensao = ValidadorImagem.DetectarExtensao(conteudo);
+        if (extensao is null)
+        {
+            return BadRequest(new { mensagem = "Formato inválido. Envie uma imagem JPEG ou PNG." });
+        }
+
+        await _medicoService.AtualizarFotoPerfilAsync(medicoId.Value, conteudo, extensao);
+
+        var medico = await _medicoService.ObterAsync(medicoId.Value);
+        return Ok(new { fotoUrl = medico!.Usuario!.FotoUrl });
+    }
+
+    private async Task<Guid?> ResolverMeuMedicoIdAsync()
+    {
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        return await _medicoService.ObterMedicoIdPorUsuarioAsync(usuarioId);
     }
 
     [Authorize(Roles = "Admin")]
@@ -74,7 +145,7 @@ public class MedicosController : ControllerBase
         medico.Crm,
         medico.DuracaoConsultaPadraoMinutos,
         medico.Ativo,
-        Usuario = new { medico.Usuario!.Id, medico.Usuario.Nome, medico.Usuario.Email, medico.Usuario.Telefone, medico.Usuario.Ativo },
+        Usuario = new { medico.Usuario!.Id, medico.Usuario.Nome, medico.Usuario.Email, medico.Usuario.Telefone, medico.Usuario.Ativo, medico.Usuario.FotoUrl },
         Especialidade = new { medico.Especialidade!.Id, medico.Especialidade.Nome }
     };
 }

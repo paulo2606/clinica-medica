@@ -9,6 +9,8 @@ public interface IMedicoService
     Task<List<Medico>> ListarAsync(bool incluirInativos);
     Task<Medico?> ObterAsync(Guid id);
     Task<ResultadoOperacao> AtualizarAsync(Guid id, string crm, Guid especialidadeId);
+    Task<ResultadoOperacao> AtualizarMeuPerfilAsync(Guid id, string nome, Guid especialidadeId);
+    Task<ResultadoOperacao> AtualizarFotoPerfilAsync(Guid id, byte[] conteudoArquivo, string extensao);
     Task<ResultadoOperacao> DesativarAsync(Guid id);
     Task<Guid?> ObterMedicoIdPorUsuarioAsync(Guid usuarioId);
 }

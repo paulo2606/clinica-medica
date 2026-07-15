@@ -8,3 +8,6 @@ obj/
 *.user
 .env
 .claude/
+
+src/AgendamentoClinica.Api/wwwroot/fotos-perfil/*
+!src/AgendamentoClinica.Api/wwwroot/fotos-perfil/.gitkeep

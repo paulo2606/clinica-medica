@@ -7,7 +7,6 @@ namespace AgendamentoClinica.Api.Controllers;
 
 [ApiController]
 [Route("api/especialidades")]
-[Authorize(Roles = "Admin")]
 public class EspecialidadesController : ControllerBase
 {
     private readonly IEspecialidadeService _especialidadeService;
@@ -17,6 +16,7 @@ public class EspecialidadesController : ControllerBase
         _especialidadeService = especialidadeService;
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] CriarEspecialidadeRequest requisicao)
     {
@@ -29,6 +29,7 @@ public class EspecialidadesController : ControllerBase
         return Created(string.Empty, new { id });
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpGet]
     public async Task<IActionResult> Listar([FromQuery] bool incluirInativas = false)
     {
@@ -36,6 +37,7 @@ public class EspecialidadesController : ControllerBase
         return Ok(especialidades.Select(e => new { e.Id, e.Nome, e.Ativo }));
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Obter(Guid id)
     {
@@ -48,6 +50,7 @@ public class EspecialidadesController : ControllerBase
         return Ok(new { especialidade.Id, especialidade.Nome, especialidade.Ativo });
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Atualizar(Guid id, [FromBody] CriarEspecialidadeRequest requisicao)
     {
@@ -60,6 +63,7 @@ public class EspecialidadesController : ControllerBase
         };
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPatch("{id:guid}/desativar")]
     public async Task<IActionResult> Desativar(Guid id)
     {

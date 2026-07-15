@@ -1,8 +1,10 @@
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Models;
 using AgendamentoClinica.Api.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
 using Xunit;
 
 namespace AgendamentoClinica.Tests.Services;
@@ -13,6 +15,16 @@ public class MedicoServiceTests
     {
         public List<EmailMensagem> Enfileiradas { get; } = [];
         public void Enfileirar(EmailMensagem mensagem) => Enfileiradas.Add(mensagem);
+    }
+
+    private class AmbienteFake : IWebHostEnvironment
+    {
+        public string WebRootPath { get; set; } = Path.Combine(Path.GetTempPath(), "agendamento-testes", Guid.NewGuid().ToString());
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+        public string ApplicationName { get; set; } = "Testes";
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public string EnvironmentName { get; set; } = "Testes";
     }
 
     private static AgendamentoDbContext CriarDbContext()
@@ -50,7 +62,7 @@ public class MedicoServiceTests
         var configuracao = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Frontend:UrlBase"] = "http://localhost:3000" })
             .Build();
-        var servico = new MedicoService(db, new SenhaService(), CriarTokenService(), fila, configuracao);
+        var servico = new MedicoService(db, new SenhaService(), CriarTokenService(), fila, configuracao, new AmbienteFake());
         return (servico, fila);
     }
 
@@ -150,6 +162,77 @@ public class MedicoServiceTests
         var resultado = await servico.AtualizarAsync(idOutro!.Value, "CRM12345", especialidadeId);
 
         Assert.Equal(ResultadoOperacao.Duplicado, resultado);
+    }
+
+    [Fact]
+    public async Task AtualizarMeuPerfilAsync_ComDadosValidos_DeveAtualizarNomeEEspecialidade()
+    {
+        var db = CriarDbContext();
+        var especialidadeId = await CriarEspecialidadeAsync(db, "Cardiologia");
+        var outraEspecialidadeId = await CriarEspecialidadeAsync(db, "Dermatologia");
+        var (servico, _) = CriarServico(db);
+        var (_, id) = await servico.CriarAsync("Bruno Medico", "bruno@clinica.com", "41988887777", "CRM12345", especialidadeId);
+
+        var resultado = await servico.AtualizarMeuPerfilAsync(id!.Value, "Bruno Atualizado", outraEspecialidadeId);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var medico = await servico.ObterAsync(id.Value);
+        Assert.Equal("Bruno Atualizado", medico!.Usuario!.Nome);
+        Assert.Equal(outraEspecialidadeId, medico.EspecialidadeId);
+    }
+
+    [Fact]
+    public async Task AtualizarMeuPerfilAsync_ComEspecialidadeInexistente_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var especialidadeId = await CriarEspecialidadeAsync(db);
+        var (servico, _) = CriarServico(db);
+        var (_, id) = await servico.CriarAsync("Bruno Medico", "bruno@clinica.com", "41988887777", "CRM12345", especialidadeId);
+
+        var resultado = await servico.AtualizarMeuPerfilAsync(id!.Value, "Bruno Atualizado", Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+        var medico = await servico.ObterAsync(id.Value);
+        Assert.Equal("Bruno Medico", medico!.Usuario!.Nome);
+    }
+
+    [Fact]
+    public async Task AtualizarMeuPerfilAsync_ComIdInexistente_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var especialidadeId = await CriarEspecialidadeAsync(db);
+        var (servico, _) = CriarServico(db);
+
+        var resultado = await servico.AtualizarMeuPerfilAsync(Guid.NewGuid(), "Bruno Atualizado", especialidadeId);
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+    }
+
+    [Fact]
+    public async Task AtualizarFotoPerfilAsync_ComDadosValidos_DeveSalvarArquivoEAtualizarFotoUrl()
+    {
+        var db = CriarDbContext();
+        var especialidadeId = await CriarEspecialidadeAsync(db);
+        var (servico, _) = CriarServico(db);
+        var (_, id) = await servico.CriarAsync("Bruno Medico", "bruno@clinica.com", "41988887777", "CRM12345", especialidadeId);
+        var conteudo = new byte[] { 0xFF, 0xD8, 0xFF, 0x01, 0x02 };
+
+        var resultado = await servico.AtualizarFotoPerfilAsync(id!.Value, conteudo, "jpg");
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var medico = await servico.ObterAsync(id.Value);
+        Assert.Equal($"/fotos-perfil/{medico!.Usuario!.Id}.jpg", medico.Usuario.FotoUrl);
+    }
+
+    [Fact]
+    public async Task AtualizarFotoPerfilAsync_ComIdInexistente_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var (servico, _) = CriarServico(db);
+
+        var resultado = await servico.AtualizarFotoPerfilAsync(Guid.NewGuid(), [0xFF, 0xD8, 0xFF], "jpg");
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
     }
 
     [Fact]

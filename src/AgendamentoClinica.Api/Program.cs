@@ -132,6 +132,7 @@ app.Use(async (contexto, proximo) =>
     await proximo();
 });
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseCors("frontend");
 app.UseRateLimiter();
 app.UseAuthentication();

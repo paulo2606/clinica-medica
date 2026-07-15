@@ -31,6 +31,7 @@ public class AgendamentoDbContext : DbContext
             entidade.HasIndex(u => u.Telefone).IsUnique();
             entidade.Property(u => u.SenhaHash).HasColumnName("senha_hash").IsRequired();
             entidade.Property(u => u.Papel).HasColumnName("papel").HasConversion<string>().HasMaxLength(20);
+            entidade.Property(u => u.FotoUrl).HasColumnName("foto_url").HasMaxLength(300);
             entidade.Property(u => u.Ativo).HasColumnName("ativo");
             entidade.Property(u => u.CriadoEm).HasColumnName("criado_em");
         });

@@ -16,19 +16,22 @@ public class MedicoService : IMedicoService
     private readonly ITokenService _tokenService;
     private readonly IFilaEmail _filaEmail;
     private readonly IConfiguration _configuracao;
+    private readonly IWebHostEnvironment _ambiente;
 
     public MedicoService(
         AgendamentoDbContext db,
         ISenhaService senhaService,
         ITokenService tokenService,
         IFilaEmail filaEmail,
-        IConfiguration configuracao)
+        IConfiguration configuracao,
+        IWebHostEnvironment ambiente)
     {
         _db = db;
         _senhaService = senhaService;
         _tokenService = tokenService;
         _filaEmail = filaEmail;
         _configuracao = configuracao;
+        _ambiente = ambiente;
     }
 
     public async Task<(ResultadoOperacao Resultado, Guid? MedicoId)> CriarAsync(
@@ -132,6 +135,49 @@ public class MedicoService : IMedicoService
 
         medico.Crm = crm;
         medico.EspecialidadeId = especialidadeId;
+        await _db.SaveChangesAsync();
+        return ResultadoOperacao.Sucesso;
+    }
+
+    public async Task<ResultadoOperacao> AtualizarMeuPerfilAsync(Guid id, string nome, Guid especialidadeId)
+    {
+        var medico = await _db.Medicos.Include(m => m.Usuario).FirstOrDefaultAsync(m => m.Id == id);
+        if (medico is null || medico.Usuario is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        if (!await _db.Especialidades.AnyAsync(e => e.Id == especialidadeId && e.Ativo))
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        medico.Usuario.Nome = nome;
+        medico.EspecialidadeId = especialidadeId;
+        await _db.SaveChangesAsync();
+        return ResultadoOperacao.Sucesso;
+    }
+
+    public async Task<ResultadoOperacao> AtualizarFotoPerfilAsync(Guid id, byte[] conteudoArquivo, string extensao)
+    {
+        var medico = await _db.Medicos.Include(m => m.Usuario).FirstOrDefaultAsync(m => m.Id == id);
+        if (medico is null || medico.Usuario is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        var pastaFotos = Path.Combine(_ambiente.WebRootPath, "fotos-perfil");
+        Directory.CreateDirectory(pastaFotos);
+
+        foreach (var arquivoAntigo in Directory.GetFiles(pastaFotos, $"{medico.Usuario.Id}.*"))
+        {
+            File.Delete(arquivoAntigo);
+        }
+
+        var nomeArquivo = $"{medico.Usuario.Id}.{extensao}";
+        await File.WriteAllBytesAsync(Path.Combine(pastaFotos, nomeArquivo), conteudoArquivo);
+
+        medico.Usuario.FotoUrl = $"/fotos-perfil/{nomeArquivo}";
         await _db.SaveChangesAsync();
         return ResultadoOperacao.Sucesso;
     }
