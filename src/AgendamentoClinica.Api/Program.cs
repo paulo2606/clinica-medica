@@ -51,6 +51,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+var origensCorsPermitidas = builder.Configuration.GetSection("Cors:OrigensPermitidas").Get<string[]>() ?? [];
+builder.Services.AddCors(opcoes =>
+{
+    opcoes.AddPolicy("frontend", politica =>
+        politica.WithOrigins(origensCorsPermitidas)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials());
+});
+
 builder.Services.AddRateLimiter(opcoes =>
 {
     var limitePermitido = builder.Configuration.GetValue("RateLimiting:AuthSensivel:PermitLimit", 5);
@@ -122,6 +132,7 @@ app.Use(async (contexto, proximo) =>
     await proximo();
 });
 app.UseHttpsRedirection();
+app.UseCors("frontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
