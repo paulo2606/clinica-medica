@@ -8,7 +8,8 @@ public record AtualizarBloqueioAgendaRequest(
     [Required] DateTime DataHoraFim,
     TipoRecorrenciaBloqueio TipoRecorrencia,
     DateOnly? RecorrenciaAte,
-    [MaxLength(200)] string? Motivo
+    [MaxLength(200)] string? Motivo,
+    [RegularExpression("^#[0-9A-Fa-f]{6}$", ErrorMessage = "Cor deve ser um hex válido, ex: #1F4D3A.")] string? Cor = null
     ) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

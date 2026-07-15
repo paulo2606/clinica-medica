@@ -16,7 +16,7 @@ public class BloqueioAgendaService : IBloqueioAgendaService
 
     public async Task<(ResultadoOperacao Resultado, Guid? Id)> CriarAsync(
         Guid medicoId, DateTime dataHoraInicio, DateTime dataHoraFim,
-        TipoRecorrenciaBloqueio tipoRecorrencia, DateOnly? recorrenciaAte, string? motivo)
+        TipoRecorrenciaBloqueio tipoRecorrencia, DateOnly? recorrenciaAte, string? motivo, string? cor = null)
     {
         if (!await _db.Medicos.AnyAsync(m => m.Id == medicoId && m.Ativo))
         {
@@ -32,7 +32,8 @@ public class BloqueioAgendaService : IBloqueioAgendaService
             TipoRecorrencia = tipoRecorrencia,
             RecorrenciaAte = recorrenciaAte,
             RegraRecorrencia = RecorrenciaBloqueio.MontarRegra(tipoRecorrencia, recorrenciaAte),
-            Motivo = motivo
+            Motivo = motivo,
+            Cor = cor
         };
         _db.BloqueiosAgendaMedico.Add(bloqueio);
         await _db.SaveChangesAsync();
@@ -48,7 +49,7 @@ public class BloqueioAgendaService : IBloqueioAgendaService
 
     public async Task<ResultadoOperacao> AtualizarAsync(
         Guid id, Guid? medicoIdRestricao, DateTime dataHoraInicio, DateTime dataHoraFim,
-        TipoRecorrenciaBloqueio tipoRecorrencia, DateOnly? recorrenciaAte, string? motivo)
+        TipoRecorrenciaBloqueio tipoRecorrencia, DateOnly? recorrenciaAte, string? motivo, string? cor = null)
     {
         var bloqueio = await _db.BloqueiosAgendaMedico.FirstOrDefaultAsync(b => b.Id == id);
         if (bloqueio is null || (medicoIdRestricao.HasValue && bloqueio.MedicoId != medicoIdRestricao.Value))
@@ -62,6 +63,7 @@ public class BloqueioAgendaService : IBloqueioAgendaService
         bloqueio.RecorrenciaAte = recorrenciaAte;
         bloqueio.RegraRecorrencia = RecorrenciaBloqueio.MontarRegra(tipoRecorrencia, recorrenciaAte);
         bloqueio.Motivo = motivo;
+        bloqueio.Cor = cor;
         await _db.SaveChangesAsync();
 
         return ResultadoOperacao.Sucesso;

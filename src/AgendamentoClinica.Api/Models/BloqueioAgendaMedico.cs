@@ -10,6 +10,7 @@ public class BloqueioAgendaMedico
     public DateOnly? RecorrenciaAte { get; set; }
     public string? RegraRecorrencia { get; set; }
     public string? Motivo { get; set; }
+    public string? Cor { get; set; }
     public DateTime CriadoEm { get; set; } = DateTime.UtcNow;
 
     public Medico? Medico { get; set; }

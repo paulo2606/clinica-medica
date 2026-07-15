@@ -27,7 +27,7 @@ public class BloqueiosAgendaController : ControllerBase
     {
         var (resultado, id) = await _bloqueioAgendaService.CriarAsync(
             requisicao.MedicoId, requisicao.DataHoraInicio, requisicao.DataHoraFim,
-            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo);
+            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo, requisicao.Cor);
 
         return resultado == ResultadoOperacao.NaoEncontrado
             ? BadRequest(new { mensagem = "Médico não encontrado ou inativo." })
@@ -46,7 +46,7 @@ public class BloqueiosAgendaController : ControllerBase
 
         var (resultado, id) = await _bloqueioAgendaService.CriarAsync(
             medicoId.Value, requisicao.DataHoraInicio, requisicao.DataHoraFim,
-            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo);
+            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo, requisicao.Cor);
 
         return resultado == ResultadoOperacao.NaoEncontrado
             ? BadRequest(new { mensagem = "Médico não encontrado ou inativo." })
@@ -87,7 +87,7 @@ public class BloqueiosAgendaController : ControllerBase
 
         var resultado = await _bloqueioAgendaService.AtualizarAsync(
             id, medicoIdRestricao, requisicao.DataHoraInicio, requisicao.DataHoraFim,
-            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo);
+            requisicao.TipoRecorrencia, requisicao.RecorrenciaAte, requisicao.Motivo, requisicao.Cor);
 
         return resultado == ResultadoOperacao.NaoEncontrado ? NotFound() : NoContent();
     }
@@ -132,6 +132,7 @@ public class BloqueiosAgendaController : ControllerBase
         bloqueio.DataHoraFim,
         bloqueio.TipoRecorrencia,
         bloqueio.RecorrenciaAte,
-        bloqueio.Motivo
+        bloqueio.Motivo,
+        bloqueio.Cor
     };
 }

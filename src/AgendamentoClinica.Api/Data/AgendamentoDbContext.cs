@@ -179,6 +179,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(b => b.RecorrenciaAte).HasColumnName("recorrencia_ate");
             entidade.Property(b => b.RegraRecorrencia).HasColumnName("regra_recorrencia");
             entidade.Property(b => b.Motivo).HasColumnName("motivo").HasMaxLength(200);
+            entidade.Property(b => b.Cor).HasColumnName("cor").HasMaxLength(7);
             entidade.Property(b => b.CriadoEm).HasColumnName("criado_em");
 
             entidade.HasOne(b => b.Medico)
