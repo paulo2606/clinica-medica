@@ -527,4 +527,67 @@ public class ConsultaServiceTests
 
         Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
     }
+
+    [Fact]
+    public async Task CalcularDiasDisponiveisAsync_DeveRetornarSoOsDiasComHorarioLivre()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
+        {
+            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DiaSemana.Segunda,
+            HoraInicio = new TimeOnly(8, 0), HoraFim = new TimeOnly(9, 0)
+        });
+        await db.SaveChangesAsync();
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var dias = await servico.CalcularDiasDisponiveisAsync(medicoId, 2026, 7);
+
+        Assert.Equal(
+            new[] { new DateOnly(2026, 7, 6), new DateOnly(2026, 7, 13), new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 27) },
+            dias);
+    }
+
+    [Fact]
+    public async Task CalcularDiasDisponiveisAsync_SemHorarioDeTrabalho_DeveRetornarListaVazia()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var dias = await servico.CalcularDiasDisponiveisAsync(medicoId, 2026, 7);
+
+        Assert.Empty(dias);
+    }
+
+    [Fact]
+    public async Task CalcularDiasDisponiveisAsync_ComDiaTotalmenteOcupado_NaoDeveIncluiLo()
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
+        {
+            Id = Guid.NewGuid(), MedicoId = medicoId, DiaSemana = DiaSemana.Segunda,
+            HoraInicio = new TimeOnly(8, 0), HoraFim = new TimeOnly(8, 20)
+        });
+        db.Consultas.Add(new Consulta
+        {
+            Id = Guid.NewGuid(),
+            MedicoId = medicoId,
+            PacienteId = pacienteId,
+            DataHora = new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc),
+            DuracaoMinutos = 15,
+            Status = StatusConsulta.Agendada,
+            CriadoPorUsuarioId = Guid.NewGuid()
+        });
+        await db.SaveChangesAsync();
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var dias = await servico.CalcularDiasDisponiveisAsync(medicoId, 2026, 7);
+
+        Assert.Equal(
+            new[] { new DateOnly(2026, 7, 6), new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 27) },
+            dias);
+    }
 }

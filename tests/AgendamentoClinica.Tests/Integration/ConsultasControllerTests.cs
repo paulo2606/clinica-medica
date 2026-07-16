@@ -157,6 +157,42 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         return (medico.Id, corpo!["accessToken"]);
     }
 
+    private async Task<(Guid MedicoId, string Token)> CriarMedicoComHorarioEmDiaELogarAsync(HttpClient cliente, DiaSemana diaSemana)
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var senhaService = escopo.ServiceProvider.GetRequiredService<ISenhaService>();
+        var especialidade = new Especialidade { Id = Guid.NewGuid(), Nome = $"Especialidade-{Guid.NewGuid()}" };
+        db.Especialidades.Add(especialidade);
+        var email = $"{Guid.NewGuid()}@clinica.com";
+        var usuario = new Usuario
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Bruno Medico",
+            Email = email,
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
+            SenhaHash = senhaService.GerarHash("senha123"),
+            Papel = PapelUsuario.Medico,
+            Ativo = true
+        };
+        db.Usuarios.Add(usuario);
+        var medico = new Medico { Id = Guid.NewGuid(), UsuarioId = usuario.Id, EspecialidadeId = especialidade.Id, Crm = $"CRM{Random.Shared.Next(1000000, 9999999)}" };
+        db.Medicos.Add(medico);
+        db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
+        {
+            Id = Guid.NewGuid(),
+            MedicoId = medico.Id,
+            DiaSemana = diaSemana,
+            HoraInicio = new TimeOnly(8, 0),
+            HoraFim = new TimeOnly(9, 0)
+        });
+        await db.SaveChangesAsync();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "senha123"));
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return (medico.Id, corpo!["accessToken"]);
+    }
+
     private async Task<Guid> CriarPacienteAsync()
     {
         using var escopo = _factory.Services.CreateScope();
@@ -360,5 +396,39 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
         var consultas = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
         Assert.Single(consultas!);
+    }
+
+    [Fact]
+    public async Task DiasDisponiveis_ComoRecepcao_DeveRetornarOsDiasComHorarioLivre()
+    {
+        var cliente = _factory.CreateClient();
+        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var medicoId = await CriarMedicoComHorarioAsync();
+
+        var resposta = await cliente.GetAsync($"/api/consultas/dias-disponiveis?medicoId={medicoId}&ano=2026&mes=7");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var dias = await resposta.Content.ReadFromJsonAsync<List<DateOnly>>();
+        Assert.Equal(
+            new[] { new DateOnly(2026, 7, 6), new DateOnly(2026, 7, 13), new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 27) },
+            dias);
+    }
+
+    [Fact]
+    public async Task DiasDisponiveis_ComoMedico_DeveRetornarOsProprioDiasMesmoPassandoOutroMedicoIdNaQuery()
+    {
+        var cliente = _factory.CreateClient();
+        var (_, tokenMedico) = await CriarMedicoComHorarioEmDiaELogarAsync(cliente, DiaSemana.Terca);
+        var outroMedicoId = await CriarMedicoComHorarioAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+
+        var resposta = await cliente.GetAsync($"/api/consultas/dias-disponiveis?medicoId={outroMedicoId}&ano=2026&mes=7");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var dias = await resposta.Content.ReadFromJsonAsync<List<DateOnly>>();
+        Assert.Equal(
+            new[] { new DateOnly(2026, 7, 7), new DateOnly(2026, 7, 14), new DateOnly(2026, 7, 21), new DateOnly(2026, 7, 28) },
+            dias);
     }
 }

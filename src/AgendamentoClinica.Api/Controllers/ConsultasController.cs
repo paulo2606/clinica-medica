@@ -42,6 +42,25 @@ public class ConsultasController : ControllerBase
     }
 
     [Authorize(Roles = "Admin,Recepcao,Medico")]
+    [HttpGet("dias-disponiveis")]
+    public async Task<IActionResult> DiasDisponiveis([FromQuery] Guid medicoId, [FromQuery] int ano, [FromQuery] int mes)
+    {
+        var medicoIdEfetivo = medicoId;
+        if (User.IsInRole("Medico"))
+        {
+            var meuMedicoId = await ResolverMeuMedicoIdAsync();
+            if (meuMedicoId is null)
+            {
+                return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+            }
+            medicoIdEfetivo = meuMedicoId.Value;
+        }
+
+        var dias = await _consultaService.CalcularDiasDisponiveisAsync(medicoIdEfetivo, ano, mes);
+        return Ok(dias);
+    }
+
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
     [HttpGet]
     public async Task<IActionResult> Listar([FromQuery] Guid? medicoId, [FromQuery] DateOnly? data, [FromQuery] StatusConsulta? status)
     {

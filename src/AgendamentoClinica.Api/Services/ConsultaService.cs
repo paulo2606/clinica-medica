@@ -75,6 +75,23 @@ public class ConsultaService : IConsultaService
         return slotsLivres.OrderBy(s => s).ToList();
     }
 
+    public async Task<List<DateOnly>> CalcularDiasDisponiveisAsync(Guid medicoId, int ano, int mes)
+    {
+        var dias = new List<DateOnly>();
+        var diasNoMes = DateTime.DaysInMonth(ano, mes);
+        for (var dia = 1; dia <= diasNoMes; dia++)
+        {
+            var data = new DateOnly(ano, mes, dia);
+            var horariosLivres = await CalcularHorariosLivresAsync(medicoId, data);
+            if (horariosLivres.Count > 0)
+            {
+                dias.Add(data);
+            }
+        }
+
+        return dias;
+    }
+
     public async Task<(ResultadoOperacao Resultado, Guid? Id)> CriarAsync(
         Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId, TipoConsulta tipo = TipoConsulta.Retorno)
     {
