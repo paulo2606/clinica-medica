@@ -236,6 +236,35 @@ public class MedicoServiceTests
     }
 
     [Fact]
+    public async Task SolicitarExclusaoDadosAsync_ComIdExistente_DeveEnfileirarEmailParaAdminsAtivos()
+    {
+        var db = CriarDbContext();
+        var especialidadeId = await CriarEspecialidadeAsync(db);
+        var (servico, fila) = CriarServico(db);
+        var (_, id) = await servico.CriarAsync("Bruno Medico", "bruno@clinica.com", "41988887777", "CRM12345", especialidadeId);
+        db.Usuarios.Add(new Usuario { Id = Guid.NewGuid(), Nome = "Admin Ativo", Email = "admin@clinica.com", Telefone = "1", SenhaHash = "x", Papel = PapelUsuario.Admin, Ativo = true });
+        db.Usuarios.Add(new Usuario { Id = Guid.NewGuid(), Nome = "Admin Inativo", Email = "inativo@clinica.com", Telefone = "2", SenhaHash = "x", Papel = PapelUsuario.Admin, Ativo = false });
+        await db.SaveChangesAsync();
+
+        var resultado = await servico.SolicitarExclusaoDadosAsync(id!.Value);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        Assert.Contains(fila.Enfileiradas, e => e.Para == "admin@clinica.com");
+        Assert.DoesNotContain(fila.Enfileiradas, e => e.Para == "inativo@clinica.com");
+    }
+
+    [Fact]
+    public async Task SolicitarExclusaoDadosAsync_ComIdInexistente_DeveRetornarNaoEncontrado()
+    {
+        var db = CriarDbContext();
+        var (servico, _) = CriarServico(db);
+
+        var resultado = await servico.SolicitarExclusaoDadosAsync(Guid.NewGuid());
+
+        Assert.Equal(ResultadoOperacao.NaoEncontrado, resultado);
+    }
+
+    [Fact]
     public async Task DesativarAsync_ComIdExistente_DeveMarcarComoInativo()
     {
         var db = CriarDbContext();

@@ -5,6 +5,7 @@ using AgendamentoClinica.Api.Services;
 using AgendamentoClinica.Api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace AgendamentoClinica.Api.Controllers;
 
@@ -79,6 +80,21 @@ public class MedicosController : ControllerBase
 
         var medico = await _medicoService.ObterAsync(medicoId.Value);
         return Ok(new { fotoUrl = medico!.Usuario!.FotoUrl });
+    }
+
+    [Authorize(Roles = "Medico")]
+    [EnableRateLimiting("auth-sensivel")]
+    [HttpPost("meu/solicitar-exclusao")]
+    public async Task<IActionResult> SolicitarExclusaoDosMeusDados()
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+        }
+
+        await _medicoService.SolicitarExclusaoDadosAsync(medicoId.Value);
+        return NoContent();
     }
 
     private async Task<Guid?> ResolverMeuMedicoIdAsync()

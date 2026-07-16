@@ -182,6 +182,38 @@ public class MedicoService : IMedicoService
         return ResultadoOperacao.Sucesso;
     }
 
+    public async Task<ResultadoOperacao> SolicitarExclusaoDadosAsync(Guid id)
+    {
+        var medico = await _db.Medicos.Include(m => m.Usuario).FirstOrDefaultAsync(m => m.Id == id);
+        if (medico is null || medico.Usuario is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        var emailsAdmins = await _db.Usuarios
+            .Where(u => u.Papel == PapelUsuario.Admin && u.Ativo)
+            .Select(u => u.Email)
+            .ToListAsync();
+
+        var urlBase = _configuracao["Frontend:UrlBase"]?.TrimEnd('/') ?? "";
+        var link = $"{urlBase}/admin";
+        var corpo = EmailTemplateHtml.MontarCartaoAcao(
+            "Solicitação de exclusão de dados",
+            "Admin",
+            $"O(a) médico(a) {medico.Usuario.Nome} ({medico.Usuario.Email}, CRM {medico.Crm}) solicitou a exclusão dos seus dados pessoais, conforme a LGPD.",
+            "Revise o cadastro e execute a exclusão ou anonimização dos dados conforme a política interna da clínica.",
+            "Ver painel",
+            link,
+            "Esta solicitação requer revisão manual antes de qualquer exclusão de dados.");
+
+        foreach (var emailAdmin in emailsAdmins)
+        {
+            _filaEmail.Enfileirar(new EmailMensagem(emailAdmin, "Solicitação de exclusão de dados (LGPD)", corpo));
+        }
+
+        return ResultadoOperacao.Sucesso;
+    }
+
     public async Task<ResultadoOperacao> DesativarAsync(Guid id)
     {
         var medico = await _db.Medicos.FirstOrDefaultAsync(m => m.Id == id);
