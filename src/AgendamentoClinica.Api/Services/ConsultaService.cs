@@ -10,6 +10,14 @@ public class ConsultaService : IConsultaService
     private const int DuracaoConsultaMinutos = 15;
     private const int BufferMinutos = 5;
 
+    private static readonly Dictionary<TipoConsulta, int> DuracaoPorTipo = new()
+    {
+        [TipoConsulta.PrimeiraConsulta] = 20,
+        [TipoConsulta.Retorno] = 20,
+        [TipoConsulta.Exame] = 40,
+        [TipoConsulta.Procedimento] = 40,
+    };
+
     private readonly AgendamentoDbContext _db;
     private readonly IBloqueioAgendaService _bloqueioAgendaService;
 
@@ -68,7 +76,7 @@ public class ConsultaService : IConsultaService
     }
 
     public async Task<(ResultadoOperacao Resultado, Guid? Id)> CriarAsync(
-        Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId)
+        Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId, TipoConsulta tipo = TipoConsulta.Retorno)
     {
         if (!await _db.Pacientes.AnyAsync(p => p.Id == pacienteId && p.Ativo)
             || !await _db.Medicos.AnyAsync(m => m.Id == medicoId && m.Ativo))
@@ -76,7 +84,8 @@ public class ConsultaService : IConsultaService
             return (ResultadoOperacao.NaoEncontrado, null);
         }
 
-        var fim = dataHora.AddMinutes(DuracaoConsultaMinutos);
+        var duracaoMinutos = DuracaoPorTipo[tipo];
+        var fim = dataHora.AddMinutes(duracaoMinutos);
         if (!await EstaDisponivelAsync(medicoId, dataHora, fim, consultaIdExcluida: null))
         {
             return (ResultadoOperacao.Duplicado, null);
@@ -88,7 +97,8 @@ public class ConsultaService : IConsultaService
             PacienteId = pacienteId,
             MedicoId = medicoId,
             DataHora = dataHora,
-            DuracaoMinutos = DuracaoConsultaMinutos,
+            DuracaoMinutos = duracaoMinutos,
+            Tipo = tipo,
             Status = StatusConsulta.Agendada,
             Observacoes = observacoes,
             CriadoPorUsuarioId = criadoPorUsuarioId

@@ -88,7 +88,7 @@ public class ConsultasController : ControllerBase
         }
 
         var (resultado, id) = await _consultaService.CriarAsync(
-            requisicao.PacienteId, medicoId, requisicao.DataHora, requisicao.Observacoes, usuarioId);
+            requisicao.PacienteId, medicoId, requisicao.DataHora, requisicao.Observacoes, usuarioId, requisicao.Tipo);
 
         return resultado switch
         {

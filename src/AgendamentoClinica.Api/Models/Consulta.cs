@@ -7,6 +7,7 @@ public class Consulta
     public Guid MedicoId { get; set; }
     public DateTime DataHora { get; set; }
     public int DuracaoMinutos { get; set; }
+    public TipoConsulta Tipo { get; set; } = TipoConsulta.Retorno;
     public StatusConsulta Status { get; set; } = StatusConsulta.Agendada;
     public string? Observacoes { get; set; }
     public Guid CriadoPorUsuarioId { get; set; }

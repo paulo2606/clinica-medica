@@ -144,6 +144,7 @@ public class AgendamentoDbContext : DbContext
             entidade.Property(c => c.MedicoId).HasColumnName("medico_id");
             entidade.Property(c => c.DataHora).HasColumnName("data_hora");
             entidade.Property(c => c.DuracaoMinutos).HasColumnName("duracao_minutos");
+            entidade.Property(c => c.Tipo).HasColumnName("tipo").HasConversion<string>().HasMaxLength(20).HasDefaultValue(TipoConsulta.Retorno);
             entidade.Property(c => c.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
             entidade.Property(c => c.Observacoes).HasColumnName("observacoes");
             entidade.Property(c => c.CriadoPorUsuarioId).HasColumnName("criado_por_usuario_id");

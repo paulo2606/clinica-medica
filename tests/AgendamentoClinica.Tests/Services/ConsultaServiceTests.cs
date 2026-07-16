@@ -265,8 +265,30 @@ public class ConsultaServiceTests
         Assert.Equal(ResultadoOperacao.Sucesso, resultado);
         var consulta = await db.Consultas.FindAsync(id);
         Assert.NotNull(consulta);
-        Assert.Equal(15, consulta!.DuracaoMinutos);
+        Assert.Equal(20, consulta!.DuracaoMinutos);
+        Assert.Equal(TipoConsulta.Retorno, consulta.Tipo);
         Assert.Equal(StatusConsulta.Agendada, consulta.Status);
+    }
+
+    [Theory]
+    [InlineData(TipoConsulta.PrimeiraConsulta, 20)]
+    [InlineData(TipoConsulta.Retorno, 20)]
+    [InlineData(TipoConsulta.Exame, 40)]
+    [InlineData(TipoConsulta.Procedimento, 40)]
+    public async Task CriarAsync_DeveDefinirDuracaoConformeOTipo(TipoConsulta tipo, int duracaoEsperada)
+    {
+        var db = CriarDbContext();
+        var medicoId = await CriarMedicoAsync(db);
+        var pacienteId = await CriarPacienteAsync(db);
+        var servico = new ConsultaService(db, new BloqueioAgendaService(db));
+
+        var (resultado, id) = await servico.CriarAsync(
+            pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null, Guid.NewGuid(), tipo);
+
+        Assert.Equal(ResultadoOperacao.Sucesso, resultado);
+        var consulta = await db.Consultas.FindAsync(id);
+        Assert.Equal(duracaoEsperada, consulta!.DuracaoMinutos);
+        Assert.Equal(tipo, consulta.Tipo);
     }
 
     [Fact]
