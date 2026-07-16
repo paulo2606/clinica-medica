@@ -7,7 +7,6 @@ namespace AgendamentoClinica.Api.Controllers;
 
 [ApiController]
 [Route("api/pacientes")]
-[Authorize(Roles = "Admin,Recepcao")]
 public class PacientesController : ControllerBase
 {
     private readonly IPacienteService _pacienteService;
@@ -17,6 +16,7 @@ public class PacientesController : ControllerBase
         _pacienteService = pacienteService;
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] CriarPacienteRequest requisicao)
     {
@@ -30,6 +30,7 @@ public class PacientesController : ControllerBase
         return Created(string.Empty, new { id });
     }
 
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
     [HttpGet]
     public async Task<IActionResult> Buscar([FromQuery] string? cpf, [FromQuery] string? nome, [FromQuery] bool incluirInativos = false)
     {
@@ -37,6 +38,7 @@ public class PacientesController : ControllerBase
         return Ok(pacientes.Select(p => new { p.Id, p.Nome, p.Cpf, p.Telefone, p.Email, p.DataNascimento, p.Ativo }));
     }
 
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Obter(Guid id)
     {
@@ -49,6 +51,7 @@ public class PacientesController : ControllerBase
         return Ok(new { paciente.Id, paciente.Nome, paciente.Cpf, paciente.Telefone, paciente.Email, paciente.DataNascimento, paciente.Ativo });
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Atualizar(Guid id, [FromBody] CriarPacienteRequest requisicao)
     {
@@ -62,6 +65,7 @@ public class PacientesController : ControllerBase
         };
     }
 
+    [Authorize(Roles = "Admin,Recepcao")]
     [HttpPatch("{id:guid}/desativar")]
     public async Task<IActionResult> Desativar(Guid id)
     {

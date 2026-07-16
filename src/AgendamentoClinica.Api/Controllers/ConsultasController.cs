@@ -22,11 +22,22 @@ public class ConsultasController : ControllerBase
         _medicoService = medicoService;
     }
 
-    [Authorize(Roles = "Admin,Recepcao")]
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
     [HttpGet("horarios-livres")]
     public async Task<IActionResult> HorariosLivres([FromQuery] Guid medicoId, [FromQuery] DateOnly data)
     {
-        var horarios = await _consultaService.CalcularHorariosLivresAsync(medicoId, data);
+        var medicoIdEfetivo = medicoId;
+        if (User.IsInRole("Medico"))
+        {
+            var meuMedicoId = await ResolverMeuMedicoIdAsync();
+            if (meuMedicoId is null)
+            {
+                return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+            }
+            medicoIdEfetivo = meuMedicoId.Value;
+        }
+
+        var horarios = await _consultaService.CalcularHorariosLivresAsync(medicoIdEfetivo, data);
         return Ok(horarios);
     }
 
@@ -37,8 +48,7 @@ public class ConsultasController : ControllerBase
         var medicoIdEfetivo = medicoId;
         if (User.IsInRole("Medico"))
         {
-            var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
-            medicoIdEfetivo = await _medicoService.ObterMedicoIdPorUsuarioAsync(usuarioId);
+            medicoIdEfetivo = await ResolverMeuMedicoIdAsync();
             if (medicoIdEfetivo is null)
             {
                 return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
@@ -61,13 +71,24 @@ public class ConsultasController : ControllerBase
         }));
     }
 
-    [Authorize(Roles = "Admin,Recepcao")]
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] CriarConsultaRequest requisicao)
     {
         var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var medicoId = requisicao.MedicoId;
+        if (User.IsInRole("Medico"))
+        {
+            var meuMedicoId = await ResolverMeuMedicoIdAsync();
+            if (meuMedicoId is null)
+            {
+                return NotFound(new { mensagem = "Cadastro de médico não encontrado pra esse usuário." });
+            }
+            medicoId = meuMedicoId.Value;
+        }
+
         var (resultado, id) = await _consultaService.CriarAsync(
-            requisicao.PacienteId, requisicao.MedicoId, requisicao.DataHora, requisicao.Observacoes, usuarioId);
+            requisicao.PacienteId, medicoId, requisicao.DataHora, requisicao.Observacoes, usuarioId);
 
         return resultado switch
         {
@@ -99,5 +120,11 @@ public class ConsultasController : ControllerBase
             ResultadoOperacao.ConflitoConcorrencia => Conflict(new { mensagem = "Horário acabou de ser ocupado, escolha outro." }),
             _ => NoContent()
         };
+    }
+
+    private async Task<Guid?> ResolverMeuMedicoIdAsync()
+    {
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        return await _medicoService.ObterMedicoIdPorUsuarioAsync(usuarioId);
     }
 }

@@ -47,6 +47,7 @@ public class PacientesControllerTests : IClassFixture<CustomWebApplicationFactor
             Id = Guid.NewGuid(),
             Nome = "Usuário Teste",
             Email = email,
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
             SenhaHash = senhaService.GerarHash("senha123"),
             Papel = papel,
             Ativo = true
@@ -80,6 +81,44 @@ public class PacientesControllerTests : IClassFixture<CustomWebApplicationFactor
 
         var resposta = await cliente.PostAsJsonAsync("/api/pacientes",
             new CriarPacienteRequest("Maria Silva", "111.444.777-35", "41988887777", null, DataNascimento));
+
+        Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Buscar_ComoMedico_DeveRetornar200()
+    {
+        var cliente = _factory.CreateClient();
+        var tokenAdmin = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Admin);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        await cliente.PostAsJsonAsync("/api/pacientes",
+            new CriarPacienteRequest("Maria Silva", "111.444.777-35", "41988887777", null, DataNascimento));
+
+        var tokenMedico = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Medico);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+
+        var resposta = await cliente.GetAsync("/api/pacientes?nome=Maria");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var pacientes = await resposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        Assert.Single(pacientes!);
+    }
+
+    [Fact]
+    public async Task Atualizar_ComoMedico_DeveRetornar403()
+    {
+        var cliente = _factory.CreateClient();
+        var tokenAdmin = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Admin);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/pacientes",
+            new CriarPacienteRequest("Maria Silva", "111.444.777-35", "41988887777", null, DataNascimento));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+
+        var tokenMedico = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Medico);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+
+        var resposta = await cliente.PutAsJsonAsync($"/api/pacientes/{corpo!["id"]}",
+            new CriarPacienteRequest("Maria Editada", "111.444.777-35", "41988887777", null, DataNascimento));
 
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
     }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Models;
@@ -120,6 +121,42 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         return (medico.Id, corpo!["accessToken"]);
     }
 
+    private async Task<(Guid MedicoId, string Token)> CriarMedicoComHorarioELogarAsync(HttpClient cliente)
+    {
+        using var escopo = _factory.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
+        var senhaService = escopo.ServiceProvider.GetRequiredService<ISenhaService>();
+        var especialidade = new Especialidade { Id = Guid.NewGuid(), Nome = $"Especialidade-{Guid.NewGuid()}" };
+        db.Especialidades.Add(especialidade);
+        var email = $"{Guid.NewGuid()}@clinica.com";
+        var usuario = new Usuario
+        {
+            Id = Guid.NewGuid(),
+            Nome = "Bruno Medico",
+            Email = email,
+            Telefone = $"{Random.Shared.Next(10000000, 99999999)}",
+            SenhaHash = senhaService.GerarHash("senha123"),
+            Papel = PapelUsuario.Medico,
+            Ativo = true
+        };
+        db.Usuarios.Add(usuario);
+        var medico = new Medico { Id = Guid.NewGuid(), UsuarioId = usuario.Id, EspecialidadeId = especialidade.Id, Crm = $"CRM{Random.Shared.Next(1000000, 9999999)}" };
+        db.Medicos.Add(medico);
+        db.HorariosTrabalhoMedico.Add(new HorarioTrabalhoMedico
+        {
+            Id = Guid.NewGuid(),
+            MedicoId = medico.Id,
+            DiaSemana = DiaSemana.Segunda,
+            HoraInicio = new TimeOnly(8, 0),
+            HoraFim = new TimeOnly(10, 0)
+        });
+        await db.SaveChangesAsync();
+
+        var resposta = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, "senha123"));
+        var corpo = await resposta.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+        return (medico.Id, corpo!["accessToken"]);
+    }
+
     private async Task<Guid> CriarPacienteAsync()
     {
         using var escopo = _factory.Services.CreateScope();
@@ -170,18 +207,24 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
     }
 
     [Fact]
-    public async Task Criar_ComoMedico_DeveRetornar403()
+    public async Task Criar_ComoMedico_DeveAgendarParaSiMesmoIgnorandoMedicoIdDoCorpo()
     {
         var cliente = _factory.CreateClient();
-        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Medico);
-        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var medicoId = await CriarMedicoComHorarioAsync();
+        var (medicoId, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var (outroMedicoId, _) = await CriarMedicoELogarAsync(cliente);
         var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
 
         var resposta = await cliente.PostAsJsonAsync("/api/consultas",
-            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+            new CriarConsultaRequest(pacienteId, outroMedicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
 
-        Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+
+        var listaResposta = await cliente.GetAsync("/api/consultas");
+        var consultas = await listaResposta.Content.ReadFromJsonAsync<List<Dictionary<string, object>>>();
+        var consulta = Assert.Single(consultas!);
+        var medicoIdRetornado = ((JsonElement)consulta["medicoId"]).GetString();
+        Assert.Equal(medicoId.ToString(), medicoIdRetornado);
     }
 
     [Fact]
@@ -239,16 +282,18 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
     }
 
     [Fact]
-    public async Task HorariosLivres_ComoMedico_DeveRetornar403()
+    public async Task HorariosLivres_ComoMedico_DeveRetornarOsPropriosSlotsMesmoPassandoOutroMedicoIdNaQuery()
     {
         var cliente = _factory.CreateClient();
-        var token = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Medico);
-        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var medicoId = await CriarMedicoComHorarioAsync();
+        var (_, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var outroMedicoId = await CriarMedicoComHorarioAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
 
-        var resposta = await cliente.GetAsync($"/api/consultas/horarios-livres?medicoId={medicoId}&data=2026-07-13");
+        var resposta = await cliente.GetAsync($"/api/consultas/horarios-livres?medicoId={outroMedicoId}&data=2026-07-13");
 
-        Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var slots = await resposta.Content.ReadFromJsonAsync<List<DateTime>>();
+        Assert.Equal(6, slots!.Count);
     }
 
     [Fact]
