@@ -57,6 +57,20 @@ public class PacienteServiceTests
     }
 
     [Fact]
+    public async Task BuscarAsync_PorCpfParcial_DeveEncontrar()
+    {
+        var db = CriarDbContext();
+        var servico = new PacienteService(db);
+        await servico.CriarAsync("Maria Silva", CpfValido, "41988887777", null, DataNascimento);
+        await servico.CriarAsync("Outra Pessoa", CpfValido2, "41988880000", null, DataNascimento);
+
+        var resultado = await servico.BuscarAsync(cpf: "11144", nome: null, incluirInativos: false);
+
+        Assert.Single(resultado);
+        Assert.Equal(CpfValido, resultado[0].Cpf);
+    }
+
+    [Fact]
     public async Task BuscarAsync_PorNomeParcial_DeveEncontrar()
     {
         var db = CriarDbContext();

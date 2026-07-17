@@ -58,7 +58,7 @@ public class PacienteService : IPacienteService
         if (!string.IsNullOrWhiteSpace(cpf))
         {
             var cpfNormalizado = CpfValidador.Normalizar(cpf);
-            consulta = consulta.Where(p => p.Cpf == cpfNormalizado);
+            consulta = consulta.Where(p => p.Cpf.Contains(cpfNormalizado));
         }
         if (!string.IsNullOrWhiteSpace(nome))
         {
