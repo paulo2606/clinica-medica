@@ -11,3 +11,4 @@ obj/
 
 src/AgendamentoClinica.Api/wwwroot/fotos-perfil/*
 !src/AgendamentoClinica.Api/wwwroot/fotos-perfil/.gitkeep
+src/AgendamentoClinica.Api/AnexosConsultas/
