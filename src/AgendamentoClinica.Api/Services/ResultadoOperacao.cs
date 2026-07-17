@@ -5,5 +5,6 @@ public enum ResultadoOperacao
     Sucesso,
     NaoEncontrado,
     Duplicado,
-    ConflitoConcorrencia
+    ConflitoConcorrencia,
+    LimiteExcedido
 }
