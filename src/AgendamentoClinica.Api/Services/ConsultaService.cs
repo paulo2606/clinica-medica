@@ -10,6 +10,8 @@ public class ConsultaService : IConsultaService
     private const int DuracaoConsultaMinutos = 15;
     private const int BufferMinutos = 5;
 
+    private static readonly TimeZoneInfo FusoHorarioClinica = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
     private static readonly Dictionary<TipoConsulta, int> DuracaoPorTipo = new()
     {
         [TipoConsulta.PrimeiraConsulta] = 20,
@@ -38,7 +40,7 @@ public class ConsultaService : IConsultaService
             return [];
         }
 
-        var inicioDia = data.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var inicioDia = ConverterParaUtc(data, TimeOnly.MinValue);
         var fimDia = inicioDia.AddDays(1);
         var consultasDoDia = await _db.Consultas
             .Where(c => c.MedicoId == medicoId && c.Status != StatusConsulta.Cancelada
@@ -52,8 +54,8 @@ public class ConsultaService : IConsultaService
 
         foreach (var horario in horarios)
         {
-            var candidato = data.ToDateTime(horario.HoraInicio, DateTimeKind.Utc);
-            var fimJanela = data.ToDateTime(horario.HoraFim, DateTimeKind.Utc);
+            var candidato = ConverterParaUtc(data, horario.HoraInicio);
+            var fimJanela = ConverterParaUtc(data, horario.HoraFim);
 
             while (candidato + duracaoConsulta <= fimJanela)
             {
@@ -73,6 +75,12 @@ public class ConsultaService : IConsultaService
         }
 
         return slotsLivres.OrderBy(s => s).ToList();
+    }
+
+    private static DateTime ConverterParaUtc(DateOnly data, TimeOnly hora)
+    {
+        var dataHoraLocal = data.ToDateTime(hora, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(dataHoraLocal, FusoHorarioClinica);
     }
 
     public async Task<List<DateOnly>> CalcularDiasDisponiveisAsync(Guid medicoId, int ano, int mes)
@@ -221,7 +229,7 @@ public class ConsultaService : IConsultaService
 
         if (data.HasValue)
         {
-            var inicioDia = data.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var inicioDia = ConverterParaUtc(data.Value, TimeOnly.MinValue);
             var fimDia = inicioDia.AddDays(1);
             query = query.Where(c => c.DataHora >= inicioDia && c.DataHora < fimDia);
         }

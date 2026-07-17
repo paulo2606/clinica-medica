@@ -86,9 +86,9 @@ public class ConsultaServiceTests
         var slots = await servico.CalcularHorariosLivresAsync(medicoId, DataTeste);
 
         Assert.Equal(3, slots.Count);
-        Assert.Equal(new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), slots[0]);
-        Assert.Equal(new DateTime(2026, 7, 13, 8, 20, 0, DateTimeKind.Utc), slots[1]);
-        Assert.Equal(new DateTime(2026, 7, 13, 8, 40, 0, DateTimeKind.Utc), slots[2]);
+        Assert.Equal(new DateTime(2026, 7, 13, 11, 0, 0, DateTimeKind.Utc), slots[0]);
+        Assert.Equal(new DateTime(2026, 7, 13, 11, 20, 0, DateTimeKind.Utc), slots[1]);
+        Assert.Equal(new DateTime(2026, 7, 13, 11, 40, 0, DateTimeKind.Utc), slots[2]);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class ConsultaServiceTests
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
             PacienteId = pacienteId,
-            DataHora = new DateTime(2026, 7, 13, 8, 20, 0, DateTimeKind.Utc),
+            DataHora = new DateTime(2026, 7, 13, 11, 20, 0, DateTimeKind.Utc),
             DuracaoMinutos = 15,
             Status = StatusConsulta.Agendada,
             CriadoPorUsuarioId = Guid.NewGuid()
@@ -121,7 +121,7 @@ public class ConsultaServiceTests
         var slots = await servico.CalcularHorariosLivresAsync(medicoId, DataTeste);
 
         Assert.Equal(2, slots.Count);
-        Assert.DoesNotContain(new DateTime(2026, 7, 13, 8, 20, 0, DateTimeKind.Utc), slots);
+        Assert.DoesNotContain(new DateTime(2026, 7, 13, 11, 20, 0, DateTimeKind.Utc), slots);
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public class ConsultaServiceTests
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
             PacienteId = pacienteId,
-            DataHora = new DateTime(2026, 7, 13, 8, 20, 0, DateTimeKind.Utc),
+            DataHora = new DateTime(2026, 7, 13, 11, 20, 0, DateTimeKind.Utc),
             DuracaoMinutos = 15,
             Status = StatusConsulta.Cancelada,
             CriadoPorUsuarioId = Guid.NewGuid()
@@ -172,13 +172,13 @@ public class ConsultaServiceTests
         await db.SaveChangesAsync();
         var bloqueioService = new BloqueioAgendaService(db);
         await bloqueioService.CriarAsync(
-            medicoId, new DateTime(2026, 7, 13, 8, 30, 0, DateTimeKind.Utc), new DateTime(2026, 7, 13, 9, 0, 0, DateTimeKind.Utc),
+            medicoId, new DateTime(2026, 7, 13, 11, 30, 0, DateTimeKind.Utc), new DateTime(2026, 7, 13, 12, 0, 0, DateTimeKind.Utc),
             TipoRecorrenciaBloqueio.Nenhuma, null, "Compromisso");
         var servico = new ConsultaService(db, bloqueioService);
 
         var slots = await servico.CalcularHorariosLivresAsync(medicoId, DataTeste);
 
-        Assert.Equal(new[] { new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc) }, slots);
+        Assert.Equal(new[] { new DateTime(2026, 7, 13, 11, 0, 0, DateTimeKind.Utc) }, slots);
     }
 
     [Fact]
@@ -197,14 +197,14 @@ public class ConsultaServiceTests
         await db.SaveChangesAsync();
         var bloqueioService = new BloqueioAgendaService(db);
         await bloqueioService.CriarAsync(
-            medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 13, 12, 0, 0, DateTimeKind.Utc),
+            medicoId, new DateTime(2026, 7, 13, 11, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 13, 15, 0, 0, DateTimeKind.Utc),
             TipoRecorrenciaBloqueio.Nenhuma, null, "Compromisso");
         var servico = new ConsultaService(db, bloqueioService);
 
         var slots = await servico.CalcularHorariosLivresAsync(medicoId, DataTeste);
 
-        Assert.DoesNotContain(new DateTime(2026, 7, 13, 12, 0, 0, DateTimeKind.Utc), slots);
-        Assert.Contains(new DateTime(2026, 7, 13, 12, 20, 0, DateTimeKind.Utc), slots);
+        Assert.DoesNotContain(new DateTime(2026, 7, 13, 15, 0, 0, DateTimeKind.Utc), slots);
+        Assert.Contains(new DateTime(2026, 7, 13, 15, 20, 0, DateTimeKind.Utc), slots);
     }
 
     [Fact]
@@ -247,8 +247,8 @@ public class ConsultaServiceTests
         var slots = await servico.CalcularHorariosLivresAsync(medicoId, DataTeste);
 
         Assert.Equal(2, slots.Count);
-        Assert.Contains(new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), slots);
-        Assert.Contains(new DateTime(2026, 7, 13, 14, 0, 0, DateTimeKind.Utc), slots);
+        Assert.Contains(new DateTime(2026, 7, 13, 11, 0, 0, DateTimeKind.Utc), slots);
+        Assert.Contains(new DateTime(2026, 7, 13, 17, 0, 0, DateTimeKind.Utc), slots);
     }
 
     [Fact]
@@ -576,7 +576,7 @@ public class ConsultaServiceTests
             Id = Guid.NewGuid(),
             MedicoId = medicoId,
             PacienteId = pacienteId,
-            DataHora = new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc),
+            DataHora = new DateTime(2026, 7, 13, 11, 0, 0, DateTimeKind.Utc),
             DuracaoMinutos = 15,
             Status = StatusConsulta.Agendada,
             CriadoPorUsuarioId = Guid.NewGuid()
