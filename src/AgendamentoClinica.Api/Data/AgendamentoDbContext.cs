@@ -16,6 +16,7 @@ public class AgendamentoDbContext : DbContext
     public DbSet<Paciente> Pacientes => Set<Paciente>();
     public DbSet<Consulta> Consultas => Set<Consulta>();
     public DbSet<BloqueioAgendaMedico> BloqueiosAgendaMedico => Set<BloqueioAgendaMedico>();
+    public DbSet<AnexoConsulta> AnexosConsulta => Set<AnexoConsulta>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -187,6 +188,24 @@ public class AgendamentoDbContext : DbContext
             entidade.HasOne(b => b.Medico)
                 .WithMany()
                 .HasForeignKey(b => b.MedicoId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AnexoConsulta>(entidade =>
+        {
+            entidade.ToTable("anexos_consulta");
+            entidade.HasKey(a => a.Id);
+            entidade.Property(a => a.Id).HasColumnName("id");
+            entidade.Property(a => a.ConsultaId).HasColumnName("consulta_id");
+            entidade.Property(a => a.NomeOriginal).HasColumnName("nome_original").HasMaxLength(255);
+            entidade.Property(a => a.Extensao).HasColumnName("extensao").HasMaxLength(10);
+            entidade.Property(a => a.TamanhoBytes).HasColumnName("tamanho_bytes");
+            entidade.Property(a => a.EnviadoPorUsuarioId).HasColumnName("enviado_por_usuario_id");
+            entidade.Property(a => a.CriadoEm).HasColumnName("criado_em");
+
+            entidade.HasOne(a => a.Consulta)
+                .WithMany()
+                .HasForeignKey(a => a.ConsultaId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
