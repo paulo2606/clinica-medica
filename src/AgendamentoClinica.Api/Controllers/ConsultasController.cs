@@ -3,6 +3,7 @@ using System.Security.Claims;
 using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Models;
 using AgendamentoClinica.Api.Services;
+using AgendamentoClinica.Api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,11 +16,13 @@ public class ConsultasController : ControllerBase
 {
     private readonly IConsultaService _consultaService;
     private readonly IMedicoService _medicoService;
+    private readonly IAnexoConsultaService _anexoConsultaService;
 
-    public ConsultasController(IConsultaService consultaService, IMedicoService medicoService)
+    public ConsultasController(IConsultaService consultaService, IMedicoService medicoService, IAnexoConsultaService anexoConsultaService)
     {
         _consultaService = consultaService;
         _medicoService = medicoService;
+        _anexoConsultaService = anexoConsultaService;
     }
 
     [Authorize(Roles = "Admin,Recepcao,Medico")]
@@ -141,9 +144,118 @@ public class ConsultasController : ControllerBase
         };
     }
 
+    [Authorize(Roles = "Admin,Recepcao,Medico")]
+    [RequestSizeLimit(ValidadorAnexo.TamanhoMaximoBytes)]
+    [HttpPost("{id:guid}/anexos")]
+    public async Task<IActionResult> AdicionarAnexo(Guid id, IFormFile arquivo)
+    {
+        var (permitido, medicoIdRestricao) = await TentarResolverRestricaoDeMedicoAsync();
+        if (!permitido)
+        {
+            return NotFound();
+        }
+
+        if (arquivo is null || !ValidadorAnexo.TamanhoValido(arquivo.Length))
+        {
+            return BadRequest(new { mensagem = "Envie um arquivo PDF, JPEG ou PNG de até 5MB." });
+        }
+
+        using var memoria = new MemoryStream();
+        await arquivo.CopyToAsync(memoria);
+        var conteudo = memoria.ToArray();
+
+        var extensao = ValidadorAnexo.DetectarExtensao(conteudo);
+        if (extensao is null)
+        {
+            return BadRequest(new { mensagem = "Formato inválido. Envie um arquivo PDF, JPEG ou PNG." });
+        }
+
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var (resultado, anexoId) = await _anexoConsultaService.AdicionarAsync(
+            id, medicoIdRestricao, usuarioId, conteudo, extensao, arquivo.FileName);
+
+        return resultado switch
+        {
+            ResultadoOperacao.NaoEncontrado => NotFound(),
+            ResultadoOperacao.LimiteExcedido => BadRequest(new { mensagem = "Essa consulta já tem o número máximo de anexos." }),
+            _ => Created(string.Empty, new { id = anexoId })
+        };
+    }
+
+    [Authorize(Roles = "Medico")]
+    [HttpGet("{id:guid}/anexos")]
+    public async Task<IActionResult> ListarAnexos(Guid id)
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound();
+        }
+
+        var (resultado, anexos) = await _anexoConsultaService.ListarAsync(id, medicoId);
+        if (resultado == ResultadoOperacao.NaoEncontrado)
+        {
+            return NotFound();
+        }
+
+        return Ok(anexos.Select(a => new { a.Id, a.NomeOriginal, a.Extensao, a.TamanhoBytes, a.CriadoEm }));
+    }
+
+    [Authorize(Roles = "Medico")]
+    [HttpGet("{id:guid}/anexos/{anexoId:guid}")]
+    public async Task<IActionResult> BaixarAnexo(Guid id, Guid anexoId)
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound();
+        }
+
+        var (resultado, conteudo, anexo) = await _anexoConsultaService.ObterConteudoAsync(id, anexoId, medicoId);
+        if (resultado == ResultadoOperacao.NaoEncontrado || conteudo is null || anexo is null)
+        {
+            return NotFound();
+        }
+
+        var contentType = anexo.Extensao switch
+        {
+            "pdf" => "application/pdf",
+            "jpg" => "image/jpeg",
+            "png" => "image/png",
+            _ => "application/octet-stream"
+        };
+
+        return File(conteudo, contentType, anexo.NomeOriginal);
+    }
+
+    [Authorize(Roles = "Medico")]
+    [HttpDelete("{id:guid}/anexos/{anexoId:guid}")]
+    public async Task<IActionResult> RemoverAnexo(Guid id, Guid anexoId)
+    {
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        if (medicoId is null)
+        {
+            return NotFound();
+        }
+
+        var resultado = await _anexoConsultaService.RemoverAsync(id, anexoId, medicoId);
+        return resultado == ResultadoOperacao.NaoEncontrado ? NotFound() : NoContent();
+    }
+
     private async Task<Guid?> ResolverMeuMedicoIdAsync()
     {
         var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
         return await _medicoService.ObterMedicoIdPorUsuarioAsync(usuarioId);
+    }
+
+    private async Task<(bool Permitido, Guid? MedicoIdRestricao)> TentarResolverRestricaoDeMedicoAsync()
+    {
+        if (!User.IsInRole("Medico"))
+        {
+            return (true, null);
+        }
+
+        var medicoId = await ResolverMeuMedicoIdAsync();
+        return (medicoId.HasValue, medicoId);
     }
 }

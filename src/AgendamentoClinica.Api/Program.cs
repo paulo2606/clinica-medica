@@ -26,6 +26,7 @@ builder.Services.AddScoped<IMedicoService, MedicoService>();
 builder.Services.AddScoped<IHorarioTrabalhoService, HorarioTrabalhoService>();
 builder.Services.AddScoped<IBloqueioAgendaService, BloqueioAgendaService>();
 builder.Services.AddScoped<IConsultaService, ConsultaService>();
+builder.Services.AddScoped<IAnexoConsultaService, AnexoConsultaService>();
 builder.Services.AddSingleton<FilaEmail>();
 builder.Services.AddSingleton<IFilaEmail>(sp => sp.GetRequiredService<FilaEmail>());
 builder.Services.AddSingleton<IEmailService, EmailService>();

@@ -16,6 +16,7 @@ namespace AgendamentoClinica.Tests.Integration;
 public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactory>, IAsyncLifetime
 {
     private readonly CustomWebApplicationFactory _factory;
+    private static readonly byte[] PdfValido = [0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34];
 
     public ConsultasControllerTests(CustomWebApplicationFactory factory)
     {
@@ -27,6 +28,7 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         using var escopo = _factory.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<AgendamentoDbContext>();
         await db.Database.MigrateAsync();
+        db.AnexosConsulta.RemoveRange(db.AnexosConsulta);
         db.Consultas.RemoveRange(db.Consultas);
         db.Pacientes.RemoveRange(db.Pacientes);
         db.HorariosTrabalhoMedico.RemoveRange(db.HorariosTrabalhoMedico);
@@ -430,5 +432,173 @@ public class ConsultasControllerTests : IClassFixture<CustomWebApplicationFactor
         Assert.Equal(
             new[] { new DateOnly(2026, 7, 7), new DateOnly(2026, 7, 14), new DateOnly(2026, 7, 21), new DateOnly(2026, 7, 28) },
             dias);
+    }
+
+    private static MultipartFormDataContent MontarMultipartPdf(string nomeArquivo = "laudo.pdf")
+    {
+        var conteudo = new MultipartFormDataContent();
+        var arquivo = new ByteArrayContent(PdfValido);
+        arquivo.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        conteudo.Add(arquivo, "arquivo", nomeArquivo);
+        return conteudo;
+    }
+
+    [Fact]
+    public async Task AdicionarAnexo_ComoMedicoNaPropriaConsulta_DeveRetornar201()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+
+        var resposta = await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", MontarMultipartPdf());
+
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdicionarAnexo_ComoMedicoEmConsultaDeOutroMedico_DeveRetornar404()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, _) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var (_, tokenOutroMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenOutroMedico);
+        var resposta = await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", MontarMultipartPdf());
+
+        Assert.Equal(HttpStatusCode.NotFound, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdicionarAnexo_ComoRecepcao_DeveRetornar201()
+    {
+        var cliente = _factory.CreateClient();
+        var medicoId = await CriarMedicoComHorarioAsync();
+        var pacienteId = await CriarPacienteAsync();
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+
+        var resposta = await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", MontarMultipartPdf());
+
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdicionarAnexo_ComArquivoInvalido_DeveRetornar400()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+        var multipart = new MultipartFormDataContent();
+        var arquivoInvalido = new ByteArrayContent([0x00, 0x01, 0x02]);
+        multipart.Add(arquivoInvalido, "arquivo", "arquivo.txt");
+
+        var resposta = await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", multipart);
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdicionarAnexo_NoQuartoArquivo_DeveRetornar400()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+        for (var i = 0; i < 3; i++)
+        {
+            await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", MontarMultipartPdf($"arquivo{i}.pdf"));
+        }
+
+        var resposta = await cliente.PostAsync($"/api/consultas/{corpo!["id"]}/anexos", MontarMultipartPdf("arquivo4.pdf"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListarAnexos_ComoRecepcao_DeveRetornar403()
+    {
+        var cliente = _factory.CreateClient();
+        var medicoId = await CriarMedicoComHorarioAsync();
+        var pacienteId = await CriarPacienteAsync();
+        var tokenRecepcao = await CriarUsuarioELogarAsync(cliente, PapelUsuario.Recepcao);
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenRecepcao);
+        var criarResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var corpo = await criarResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>();
+
+        var resposta = await cliente.GetAsync($"/api/consultas/{corpo!["id"]}/anexos");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListarBaixarExcluirAnexo_ComoMedicoDono_DeveFuncionarDeAPonta()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenMedico) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenMedico);
+        var criarConsultaResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var consultaId = (await criarConsultaResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>())!["id"];
+        var criarAnexoResposta = await cliente.PostAsync($"/api/consultas/{consultaId}/anexos", MontarMultipartPdf());
+        var anexoId = (await criarAnexoResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>())!["id"];
+
+        var listaResposta = await cliente.GetAsync($"/api/consultas/{consultaId}/anexos");
+        Assert.Equal(HttpStatusCode.OK, listaResposta.StatusCode);
+        var anexos = await listaResposta.Content.ReadFromJsonAsync<List<Dictionary<string, JsonElement>>>();
+        Assert.Single(anexos!);
+
+        var downloadResposta = await cliente.GetAsync($"/api/consultas/{consultaId}/anexos/{anexoId}");
+        Assert.Equal(HttpStatusCode.OK, downloadResposta.StatusCode);
+        Assert.Equal("application/pdf", downloadResposta.Content.Headers.ContentType!.MediaType);
+        var bytesBaixados = await downloadResposta.Content.ReadAsByteArrayAsync();
+        Assert.Equal(PdfValido, bytesBaixados);
+
+        var excluirResposta = await cliente.DeleteAsync($"/api/consultas/{consultaId}/anexos/{anexoId}");
+        Assert.Equal(HttpStatusCode.NoContent, excluirResposta.StatusCode);
+        var listaAposExcluir = await cliente.GetAsync($"/api/consultas/{consultaId}/anexos");
+        var anexosAposExcluir = await listaAposExcluir.Content.ReadFromJsonAsync<List<Dictionary<string, JsonElement>>>();
+        Assert.Empty(anexosAposExcluir!);
+    }
+
+    [Fact]
+    public async Task BaixarAnexo_ComoMedicoQueNaoEDono_DeveRetornar404()
+    {
+        var cliente = _factory.CreateClient();
+        var (medicoId, tokenDono) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var (_, tokenOutro) = await CriarMedicoComHorarioELogarAsync(cliente);
+        var pacienteId = await CriarPacienteAsync();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenDono);
+        var criarConsultaResposta = await cliente.PostAsJsonAsync("/api/consultas",
+            new CriarConsultaRequest(pacienteId, medicoId, new DateTime(2026, 7, 13, 8, 0, 0, DateTimeKind.Utc), null));
+        var consultaId = (await criarConsultaResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>())!["id"];
+        var criarAnexoResposta = await cliente.PostAsync($"/api/consultas/{consultaId}/anexos", MontarMultipartPdf());
+        var anexoId = (await criarAnexoResposta.Content.ReadFromJsonAsync<Dictionary<string, Guid>>())!["id"];
+
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenOutro);
+        var resposta = await cliente.GetAsync($"/api/consultas/{consultaId}/anexos/{anexoId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, resposta.StatusCode);
     }
 }
