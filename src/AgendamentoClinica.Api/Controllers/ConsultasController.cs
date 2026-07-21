@@ -182,12 +182,12 @@ public class ConsultasController : ControllerBase
         };
     }
 
-    [Authorize(Roles = "Medico")]
+    [Authorize(Roles = "Admin,Medico")]
     [HttpGet("{id:guid}/anexos")]
     public async Task<IActionResult> ListarAnexos(Guid id)
     {
-        var medicoId = await ResolverMeuMedicoIdAsync();
-        if (medicoId is null)
+        var (permitido, medicoId) = await TentarResolverRestricaoDeMedicoAsync();
+        if (!permitido)
         {
             return NotFound();
         }
@@ -201,12 +201,12 @@ public class ConsultasController : ControllerBase
         return Ok(anexos.Select(a => new { a.Id, a.NomeOriginal, a.Extensao, a.TamanhoBytes, a.CriadoEm }));
     }
 
-    [Authorize(Roles = "Medico")]
+    [Authorize(Roles = "Admin,Medico")]
     [HttpGet("{id:guid}/anexos/{anexoId:guid}")]
     public async Task<IActionResult> BaixarAnexo(Guid id, Guid anexoId)
     {
-        var medicoId = await ResolverMeuMedicoIdAsync();
-        if (medicoId is null)
+        var (permitido, medicoId) = await TentarResolverRestricaoDeMedicoAsync();
+        if (!permitido)
         {
             return NotFound();
         }
@@ -228,12 +228,12 @@ public class ConsultasController : ControllerBase
         return File(conteudo, contentType, anexo.NomeOriginal);
     }
 
-    [Authorize(Roles = "Medico")]
+    [Authorize(Roles = "Admin,Medico")]
     [HttpDelete("{id:guid}/anexos/{anexoId:guid}")]
     public async Task<IActionResult> RemoverAnexo(Guid id, Guid anexoId)
     {
-        var medicoId = await ResolverMeuMedicoIdAsync();
-        if (medicoId is null)
+        var (permitido, medicoId) = await TentarResolverRestricaoDeMedicoAsync();
+        if (!permitido)
         {
             return NotFound();
         }
