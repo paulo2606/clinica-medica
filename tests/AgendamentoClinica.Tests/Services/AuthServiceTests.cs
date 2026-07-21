@@ -160,17 +160,21 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task CadastrarAsync_ComDadosValidos_DeveCriarUsuario()
+    public async Task CadastrarAsync_ComDadosValidos_DeveCriarUsuarioComConviteDeSenha()
     {
         var db = CriarDbContext();
-        var servico = CriarServico(db, new SenhaService());
+        var filaEmail = new FilaEmailFake();
+        var servico = CriarServico(db, new SenhaService(), filaEmail);
 
-        var id = await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Medico);
+        var id = await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "11988887777", PapelUsuario.Recepcao);
 
         Assert.NotNull(id);
         var usuario = await db.Usuarios.FindAsync(id);
         Assert.NotNull(usuario);
-        Assert.NotEqual("senhaForte123", usuario!.SenhaHash);
+        Assert.False(usuario!.SenhaDefinida);
+        Assert.True(await db.TokensConviteSenha.AnyAsync(t => t.UsuarioId == id));
+        Assert.Single(filaEmail.Enfileiradas);
+        Assert.Equal("bruno@clinica.com", filaEmail.Enfileiradas[0].Para);
     }
 
     [Fact]
@@ -181,7 +185,7 @@ public class AuthServiceTests
         await CriarUsuarioAsync(db, senhaService);
         var servico = CriarServico(db, senhaService);
 
-        var id = await servico.CadastrarAsync("Outra Pessoa", "ana@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao);
+        var id = await servico.CadastrarAsync("Outra Pessoa", "ana@clinica.com", "11988887777", PapelUsuario.Recepcao);
 
         Assert.Null(id);
     }
@@ -191,20 +195,9 @@ public class AuthServiceTests
     {
         var db = CriarDbContext();
         var servico = CriarServico(db, new SenhaService());
-        await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Medico);
+        await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "11988887777", PapelUsuario.Medico);
 
-        var id = await servico.CadastrarAsync("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao);
-
-        Assert.Null(id);
-    }
-
-    [Fact]
-    public async Task CadastrarAsync_ComSenhaCurta_DeveRetornarNulo()
-    {
-        var db = CriarDbContext();
-        var servico = CriarServico(db, new SenhaService());
-
-        var id = await servico.CadastrarAsync("Bruno Medico", "bruno@clinica.com", "1234567", "11988887777", PapelUsuario.Medico);
+        var id = await servico.CadastrarAsync("Outra Pessoa", "outra@clinica.com", "11988887777", PapelUsuario.Recepcao);
 
         Assert.Null(id);
     }

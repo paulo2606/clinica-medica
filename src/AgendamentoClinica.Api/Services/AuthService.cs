@@ -8,9 +8,8 @@ namespace AgendamentoClinica.Api.Services;
 
 public class AuthService : IAuthService
 {
-    private const int TamanhoMinimoSenha = 8;
-
     private static readonly TimeSpan ValidadeTokenRedefinicaoSenha = TimeSpan.FromHours(1);
+    private static readonly TimeSpan ValidadeTokenConvite = TimeSpan.FromHours(48);
 
     private const string HashFalsoParaTempoConstante = "$2a$11$C6UzMDM.H6dfI/f/IKcEeO7ZZzP0iM5T5RQ7EX8LQ.a1kJ3d8v.CO";
 
@@ -80,13 +79,8 @@ public class AuthService : IAuthService
         }
     }
 
-    public async Task<Guid?> CadastrarAsync(string nome, string email, string senha, string telefone, PapelUsuario papel)
+    public async Task<Guid?> CadastrarAsync(string nome, string email, string telefone, PapelUsuario papel)
     {
-        if (senha.Length < TamanhoMinimoSenha)
-        {
-            return null;
-        }
-
         if (await _db.Usuarios.AnyAsync(u => u.Email == email || u.Telefone == telefone))
         {
             return null;
@@ -98,11 +92,22 @@ public class AuthService : IAuthService
             Nome = nome,
             Email = email,
             Telefone = telefone,
-            SenhaHash = _senhaService.GerarHash(senha),
+            SenhaHash = _senhaService.GerarHash(_tokenService.GerarRefreshTokenBruto()),
             Papel = papel,
-            Ativo = true
+            Ativo = true,
+            SenhaDefinida = false
         };
+        var tokenBruto = _tokenService.GerarRefreshTokenBruto();
+        var tokenConvite = new TokenConviteSenha
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = usuario.Id,
+            TokenHash = _tokenService.HashToken(tokenBruto),
+            ExpiraEm = DateTime.UtcNow.Add(ValidadeTokenConvite)
+        };
+
         _db.Usuarios.Add(usuario);
+        _db.TokensConviteSenha.Add(tokenConvite);
         try
         {
             await _db.SaveChangesAsync();
@@ -115,6 +120,8 @@ public class AuthService : IAuthService
             }
             throw;
         }
+
+        EnfileirarEmailConvite(nome, email, tokenBruto);
 
         return usuario.Id;
     }
@@ -171,11 +178,20 @@ public class AuthService : IAuthService
         }
 
         registro.Usuario.SenhaHash = _senhaService.GerarHash(novaSenha);
+        registro.Usuario.SenhaDefinida = true;
         registro.UsadoEm = DateTime.UtcNow;
         await RevogarTodosOsRefreshTokensAsync(registro.UsuarioId);
         await _db.SaveChangesAsync();
 
         return ResultadoOperacao.Sucesso;
+    }
+
+    public async Task<List<UsuarioResumo>> ListarUsuariosAsync()
+    {
+        return await _db.Usuarios
+            .OrderBy(u => u.Nome)
+            .Select(u => new UsuarioResumo(u.Id, u.Nome, u.Email, u.Telefone, u.FotoUrl, u.Papel, u.Ativo, u.SenhaDefinida))
+            .ToListAsync();
     }
 
     public async Task<bool> TrocarSenhaAsync(Guid usuarioId, string senhaAtual, string novaSenha)
@@ -191,6 +207,21 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
 
         return true;
+    }
+
+    private void EnfileirarEmailConvite(string nome, string email, string tokenBruto)
+    {
+        var urlBase = _configuracao["Frontend:UrlBase"]?.TrimEnd('/') ?? "";
+        var link = $"{urlBase}/definir-senha?token={Uri.EscapeDataString(tokenBruto)}";
+        var corpo = EmailTemplateHtml.MontarCartaoAcao(
+            "Bem-vindo(a)",
+            nome,
+            "Cadastro feito com sucesso! Você agora tem acesso ao Sistema de Agendamento.",
+            "Antes de acessar, é necessário definir sua senha de acesso.",
+            "Definir Senha",
+            link,
+            "Este link é válido por 48 horas e pode ser usado apenas uma vez.");
+        _filaEmail.Enfileirar(new EmailMensagem(email, "Bem-vindo(a) ao Sistema de Agendamento", corpo));
     }
 
     private async Task RevogarTodosOsRefreshTokensAsync(Guid usuarioId)

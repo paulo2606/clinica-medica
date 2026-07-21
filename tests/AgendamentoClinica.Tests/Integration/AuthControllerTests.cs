@@ -124,7 +124,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
-            new CriarUsuarioRequest("Carla Recepcao", "carla@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+            new CriarUsuarioRequest("Carla Recepcao", "carla@clinica.com", "11988887777", PapelUsuario.Recepcao));
 
         Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
     }
@@ -138,7 +138,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
-            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "11988887777", PapelUsuario.Recepcao));
 
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
     }
@@ -149,7 +149,7 @@ public class AuthControllerTests : IClassFixture<CustomWebApplicationFactory>, I
         var cliente = _factory.CreateClient();
 
         var resposta = await cliente.PostAsJsonAsync("/api/auth/cadastro",
-            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "senhaForte123", "11988887777", PapelUsuario.Recepcao));
+            new CriarUsuarioRequest("Outra Pessoa", "outra@clinica.com", "11988887777", PapelUsuario.Recepcao));
 
         Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
     }

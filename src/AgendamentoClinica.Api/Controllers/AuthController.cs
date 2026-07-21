@@ -79,13 +79,21 @@ public class AuthController : ControllerBase
     [HttpPost("cadastro")]
     public async Task<IActionResult> Cadastro([FromBody] CriarUsuarioRequest requisicao)
     {
-        var id = await _authService.CadastrarAsync(requisicao.Nome, requisicao.Email, requisicao.Senha, requisicao.Telefone, requisicao.Papel);
+        var id = await _authService.CadastrarAsync(requisicao.Nome, requisicao.Email, requisicao.Telefone, requisicao.Papel);
         if (id is null)
         {
-            return BadRequest(new { mensagem = "Não foi possível cadastrar: e-mail ou telefone já cadastrado, ou senha muito curta (mínimo 8 caracteres)." });
+            return BadRequest(new { mensagem = "Não foi possível cadastrar: e-mail ou telefone já cadastrado." });
         }
 
         return Created(string.Empty, new { id });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpGet("usuarios")]
+    public async Task<IActionResult> ListarUsuarios()
+    {
+        var usuarios = await _authService.ListarUsuariosAsync();
+        return Ok(usuarios);
     }
 
     [EnableRateLimiting("auth-sensivel")]
