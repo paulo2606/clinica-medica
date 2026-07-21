@@ -10,5 +10,6 @@ public class Usuario
     public string? FotoUrl { get; set; }
     public PapelUsuario Papel { get; set; }
     public bool Ativo { get; set; } = true;
+    public bool SenhaDefinida { get; set; }
     public DateTime CriadoEm { get; set; } = DateTime.UtcNow;
 }

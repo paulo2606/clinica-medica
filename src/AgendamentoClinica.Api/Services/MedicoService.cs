@@ -55,7 +55,8 @@ public class MedicoService : IMedicoService
             Telefone = telefone,
             SenhaHash = _senhaService.GerarHash(_tokenService.GerarRefreshTokenBruto()),
             Papel = PapelUsuario.Medico,
-            Ativo = true
+            Ativo = true,
+            SenhaDefinida = false
         };
         var medico = new Medico
         {

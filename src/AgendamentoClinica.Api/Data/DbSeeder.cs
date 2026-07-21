@@ -37,7 +37,8 @@ public static class DbSeeder
             Telefone = TelefonePlaceholderSeed,
             SenhaHash = senhaService.GerarHash(senhaInicial),
             Papel = PapelUsuario.Admin,
-            Ativo = true
+            Ativo = true,
+            SenhaDefinida = true
         });
         await db.SaveChangesAsync();
     }
