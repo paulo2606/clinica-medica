@@ -84,6 +84,7 @@ public class ConsultasController : ControllerBase
             c.Id,
             c.PacienteId,
             PacienteNome = c.Paciente!.Nome,
+            PacienteCpf = c.Paciente!.Cpf,
             c.MedicoId,
             MedicoNome = c.Medico!.Usuario!.Nome,
             c.DataHora,
