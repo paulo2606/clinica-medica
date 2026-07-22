@@ -10,6 +10,7 @@ public interface IConsultaService
         Guid pacienteId, Guid medicoId, DateTime dataHora, string? observacoes, Guid criadoPorUsuarioId, TipoConsulta tipo = TipoConsulta.Retorno);
     Task<ResultadoOperacao> CancelarAsync(Guid id);
     Task<ResultadoOperacao> ConfirmarAsync(Guid id);
+    Task<ResultadoOperacao> ConcluirAsync(Guid id);
     Task<ResultadoOperacao> ReagendarAsync(Guid id, DateTime novaDataHora);
     Task<List<Consulta>> ListarAsync(Guid? medicoId, DateOnly? data, StatusConsulta? status);
     Task<Consulta?> ObterPorLembreteMessageSidAsync(string messageSid);

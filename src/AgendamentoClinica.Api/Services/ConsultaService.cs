@@ -211,6 +211,26 @@ public class ConsultaService : IConsultaService
         return ResultadoOperacao.Sucesso;
     }
 
+    public async Task<ResultadoOperacao> ConcluirAsync(Guid id)
+    {
+        var consulta = await _db.Consultas.FirstOrDefaultAsync(c => c.Id == id);
+        if (consulta is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        if (consulta.Status is StatusConsulta.Cancelada or StatusConsulta.Concluida or StatusConsulta.Faltou)
+        {
+            return ResultadoOperacao.Sucesso;
+        }
+
+        consulta.Status = StatusConsulta.Concluida;
+        consulta.AtualizadoEm = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return ResultadoOperacao.Sucesso;
+    }
+
     public Task<Consulta?> ObterPorLembreteMessageSidAsync(string messageSid) =>
         _db.Consultas.FirstOrDefaultAsync(c => c.LembreteMessageSid == messageSid);
 

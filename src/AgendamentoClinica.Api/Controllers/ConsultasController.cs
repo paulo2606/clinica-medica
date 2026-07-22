@@ -130,6 +130,14 @@ public class ConsultasController : ControllerBase
         return resultado == ResultadoOperacao.NaoEncontrado ? NotFound() : NoContent();
     }
 
+    [Authorize(Roles = "Admin,Medico")]
+    [HttpPatch("{id:guid}/concluir")]
+    public async Task<IActionResult> Concluir(Guid id)
+    {
+        var resultado = await _consultaService.ConcluirAsync(id);
+        return resultado == ResultadoOperacao.NaoEncontrado ? NotFound() : NoContent();
+    }
+
     [Authorize(Roles = "Admin,Recepcao")]
     [HttpPatch("{id:guid}/reagendar")]
     public async Task<IActionResult> Reagendar(Guid id, [FromBody] ReagendarConsultaRequest requisicao)
