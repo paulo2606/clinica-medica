@@ -35,7 +35,7 @@ public class PacientesController : ControllerBase
     public async Task<IActionResult> Buscar([FromQuery] string? cpf, [FromQuery] string? nome, [FromQuery] bool incluirInativos = false)
     {
         var pacientes = await _pacienteService.BuscarAsync(cpf, nome, incluirInativos);
-        return Ok(pacientes.Select(p => new { p.Id, p.Nome, p.Cpf, p.Telefone, p.Email, p.DataNascimento, p.Ativo }));
+        return Ok(pacientes.Select(p => new { p.Id, p.Nome, p.Cpf, p.Telefone, p.Email, p.DataNascimento, p.Ativo, p.CriadoEm }));
     }
 
     [Authorize(Roles = "Admin,Recepcao,Medico")]
