@@ -1,14 +1,26 @@
 using AgendamentoClinica.Api.Data;
 using AgendamentoClinica.Api.Models;
 using AgendamentoClinica.Api.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
 using Xunit;
 
 namespace AgendamentoClinica.Tests.Services;
 
 public class AuthServiceTests
 {
+    private class AmbienteFake : IWebHostEnvironment
+    {
+        public string WebRootPath { get; set; } = Path.Combine(Path.GetTempPath(), "agendamento-testes", Guid.NewGuid().ToString());
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+        public string ApplicationName { get; set; } = "Testes";
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string ContentRootPath { get; set; } = Path.GetTempPath();
+        public string EnvironmentName { get; set; } = "Testes";
+    }
+
     private static AgendamentoDbContext CriarDbContext()
     {
         var opcoes = new DbContextOptionsBuilder<AgendamentoDbContext>()
@@ -41,7 +53,7 @@ public class AuthServiceTests
         var configuracao = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Frontend:UrlBase"] = "http://localhost:3000" })
             .Build();
-        return new AuthService(db, senhaService, CriarTokenService(), filaEmail ?? new FilaEmailFake(), configuracao);
+        return new AuthService(db, senhaService, CriarTokenService(), filaEmail ?? new FilaEmailFake(), configuracao, new AmbienteFake());
     }
 
     private static async Task<Usuario> CriarUsuarioAsync(AgendamentoDbContext db, ISenhaService senhaService, bool ativo = true)

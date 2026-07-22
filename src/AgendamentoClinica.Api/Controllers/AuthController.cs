@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using AgendamentoClinica.Api.Dtos;
 using AgendamentoClinica.Api.Services;
+using AgendamentoClinica.Api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -94,6 +95,42 @@ public class AuthController : ControllerBase
     {
         var usuarios = await _authService.ListarUsuariosAsync();
         return Ok(usuarios);
+    }
+
+    [Authorize]
+    [HttpGet("meu-perfil")]
+    public async Task<IActionResult> ObterMeuPerfil()
+    {
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var perfil = await _authService.ObterMeuPerfilAsync(usuarioId);
+        return perfil is null ? NotFound() : Ok(perfil);
+    }
+
+    [Authorize]
+    [RequestSizeLimit(ValidadorImagem.TamanhoMaximoBytes)]
+    [HttpPut("meu-perfil/foto")]
+    public async Task<IActionResult> AtualizarMinhaFoto(IFormFile foto)
+    {
+        if (foto is null || !ValidadorImagem.TamanhoValido(foto.Length))
+        {
+            return BadRequest(new { mensagem = "Envie uma imagem JPEG ou PNG de até 3MB." });
+        }
+
+        using var memoria = new MemoryStream();
+        await foto.CopyToAsync(memoria);
+        var conteudo = memoria.ToArray();
+
+        var extensao = ValidadorImagem.DetectarExtensao(conteudo);
+        if (extensao is null)
+        {
+            return BadRequest(new { mensagem = "Formato inválido. Envie uma imagem JPEG ou PNG." });
+        }
+
+        var usuarioId = Guid.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        await _authService.AtualizarMinhaFotoAsync(usuarioId, conteudo, extensao);
+
+        var perfil = await _authService.ObterMeuPerfilAsync(usuarioId);
+        return Ok(new { fotoUrl = perfil?.FotoUrl });
     }
 
     [EnableRateLimiting("auth-sensivel")]

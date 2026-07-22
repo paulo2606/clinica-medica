@@ -18,19 +18,22 @@ public class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IFilaEmail _filaEmail;
     private readonly IConfiguration _configuracao;
+    private readonly IWebHostEnvironment _ambiente;
 
     public AuthService(
         AgendamentoDbContext db,
         ISenhaService senhaService,
         ITokenService tokenService,
         IFilaEmail filaEmail,
-        IConfiguration configuracao)
+        IConfiguration configuracao,
+        IWebHostEnvironment ambiente)
     {
         _db = db;
         _senhaService = senhaService;
         _tokenService = tokenService;
         _filaEmail = filaEmail;
         _configuracao = configuracao;
+        _ambiente = ambiente;
     }
 
     public async Task<LoginResponse?> AutenticarAsync(string email, string senha)
@@ -192,6 +195,38 @@ public class AuthService : IAuthService
             .OrderBy(u => u.Nome)
             .Select(u => new UsuarioResumo(u.Id, u.Nome, u.Email, u.Telefone, u.FotoUrl, u.Papel, u.Ativo, u.SenhaDefinida))
             .ToListAsync();
+    }
+
+    public async Task<UsuarioResumo?> ObterMeuPerfilAsync(Guid usuarioId)
+    {
+        return await _db.Usuarios
+            .Where(u => u.Id == usuarioId)
+            .Select(u => new UsuarioResumo(u.Id, u.Nome, u.Email, u.Telefone, u.FotoUrl, u.Papel, u.Ativo, u.SenhaDefinida))
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<ResultadoOperacao> AtualizarMinhaFotoAsync(Guid usuarioId, byte[] conteudoArquivo, string extensao)
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null)
+        {
+            return ResultadoOperacao.NaoEncontrado;
+        }
+
+        var pastaFotos = Path.Combine(_ambiente.WebRootPath, "fotos-perfil");
+        Directory.CreateDirectory(pastaFotos);
+
+        foreach (var arquivoAntigo in Directory.GetFiles(pastaFotos, $"{usuario.Id}.*"))
+        {
+            File.Delete(arquivoAntigo);
+        }
+
+        var nomeArquivo = $"{usuario.Id}.{extensao}";
+        await File.WriteAllBytesAsync(Path.Combine(pastaFotos, nomeArquivo), conteudoArquivo);
+
+        usuario.FotoUrl = $"/fotos-perfil/{nomeArquivo}";
+        await _db.SaveChangesAsync();
+        return ResultadoOperacao.Sucesso;
     }
 
     public async Task<bool> TrocarSenhaAsync(Guid usuarioId, string senhaAtual, string novaSenha)

@@ -13,4 +13,6 @@ public interface IAuthService
     Task<ResultadoOperacao> DefinirSenhaAsync(string tokenBruto, string novaSenha);
     Task<bool> TrocarSenhaAsync(Guid usuarioId, string senhaAtual, string novaSenha);
     Task<List<UsuarioResumo>> ListarUsuariosAsync();
+    Task<UsuarioResumo?> ObterMeuPerfilAsync(Guid usuarioId);
+    Task<ResultadoOperacao> AtualizarMinhaFotoAsync(Guid usuarioId, byte[] conteudoArquivo, string extensao);
 }
